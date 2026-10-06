@@ -1,0 +1,23 @@
+# @package _global_
+defaults:
+  - /eval@_global_: pusht
+  - _self_
+
+task: eval
+project: lewm_pusht
+gpu: 2
+seed: 42
+dry_run: false
+scenarios:
+  - short
+  - long
+
+output:
+  root: ${hydra:runtime.output_dir}/results
+
+hydra:
+  run:
+    dir: /data/sungmin/lewm/runs/${project}/${now:%Y%m%dT%H%M%S}_${task}_seed${seed}
+  job:
+    name: ${project}_${task}
+  output_subdir: hydra

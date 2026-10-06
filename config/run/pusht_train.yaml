@@ -1,0 +1,19 @@
+# @package _global_
+defaults:
+  - /train@_global_: lewm
+  - _self_
+
+task: train
+project: lewm_pusht
+gpu: 0
+seed: 3072
+dry_run: false
+
+subdir: ${project}/train_seed${seed}_${now:%Y%m%dT%H%M%S}
+
+hydra:
+  run:
+    dir: /data/sungmin/lewm/runs/${project}/${now:%Y%m%dT%H%M%S}_${task}_seed${seed}
+  job:
+    name: ${project}_${task}
+  output_subdir: hydra

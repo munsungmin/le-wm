@@ -50,7 +50,6 @@ def lejepa_forward(self, batch, stage, cfg):
     self.log_dict(losses_dict, on_step=True, sync_dist=True)
     return output
 
-@hydra.main(version_base=None, config_path="./config/train", config_name="lewm")
 def run(cfg):
     #########################
     ##       dataset       ##
@@ -149,5 +148,10 @@ def run(cfg):
     return
 
 
+@hydra.main(version_base=None, config_path="./config/train", config_name="lewm")
+def main(cfg):
+    return run(cfg)
+
+
 if __name__ == "__main__":
-    run()
+    main()

@@ -46,7 +46,6 @@ def get_dataset(cfg, dataset_name):
     )
     return dataset
 
-@hydra.main(version_base=None, config_path="./config/eval", config_name="pusht")
 def run(cfg: DictConfig):
     """Evaluate a flat LeWM policy under an FF-JEPA PushT scenario."""
     assert (
@@ -163,5 +162,10 @@ def run(cfg: DictConfig):
     return result_row
 
 
+@hydra.main(version_base=None, config_path="./config/eval", config_name="pusht")
+def main(cfg: DictConfig):
+    return run(cfg)
+
+
 if __name__ == "__main__":
-    run()
+    main()
