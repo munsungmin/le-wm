@@ -1,12 +1,13 @@
 defaults:
   - launcher: local
   - solver: cem
+  - scenario: short
   - _self_
 
 world:
   env_name: swm/PushT-v1
   num_envs: ${eval.num_eval}
-  max_episode_steps: ??? # make sure it's >= eval_budget
+  max_episode_steps: ${eval.eval_budget}
 
 dataset:
   stats: ${eval.dataset_name}
@@ -16,7 +17,7 @@ dataset:
     - state
 
 seed: 42
-policy: random # ckpt name or random
+policy: pusht/lewm # checkpoint path relative to STABLEWM_HOME, or random
 
 plan_config:
   horizon: 5
@@ -25,11 +26,9 @@ plan_config:
 
 # evaluation from dataset (replay expert trajectories)
 eval:
-  num_eval: 50
-  goal_offset_steps: 25
-  eval_budget: 50
   img_size: 224
   dataset_name: pusht_expert_train
+  save_video: false
   callables:
     # -- set state
     - method: _set_state
@@ -43,4 +42,9 @@ eval:
           value: goal_state
           
 output:
-  filename: pusht_results.txt
+  root: results
+
+record:
+  env: pusht
+  model: lewm_ckpt
+  checkpoint_step: pretrained

@@ -3,6 +3,8 @@ import torch
 from stable_pretraining import data as dt
 from lightning.pytorch.callbacks import Callback
 
+from records import append_jsonl
+
 def get_img_preprocessor(source: str, target: str, img_size: int = 224):
     imagenet_stats = dt.dataset_stats.ImageNet
     to_image = dt.transforms.ToImage(**imagenet_stats, source=source, target=target)
@@ -58,3 +60,22 @@ class SaveCkptCallback(Callback):
             config=self.cfg,
             filename=f'weights_epoch_{epoch}.pt',
         )
+
+
+class JsonlMetricsCallback(Callback):
+    """Append scalar training metrics once per epoch."""
+
+    def __init__(self, path):
+        super().__init__()
+        self.path = path
+
+    def on_train_epoch_end(self, trainer, pl_module):
+        if not trainer.is_global_zero:
+            return
+        row = {"epoch": trainer.current_epoch + 1, "step": trainer.global_step}
+        for name, value in trainer.callback_metrics.items():
+            if torch.is_tensor(value) and value.numel() == 1:
+                row[name] = value.detach().cpu().item()
+            elif isinstance(value, (int, float)):
+                row[name] = value
+        append_jsonl(self.path, row)

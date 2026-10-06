@@ -2,7 +2,6 @@ import os
 
 os.environ["MUJOCO_GL"] = "egl"
 
-import time
 from pathlib import Path
 
 import hydra
@@ -13,6 +12,18 @@ from omegaconf import DictConfig, OmegaConf
 from sklearn import preprocessing
 from torchvision.transforms import v2 as transforms
 import stable_worldmodel as swm
+
+from evaluation import (
+    configure_pusht_success,
+    sample_final_goal_states,
+    sample_final_windows,
+)
+from records import (
+    append_jsonl,
+    make_run_id,
+    prepare_run,
+    validate_result_row,
+)
 
 def img_transform(cfg):
     transform = transforms.Compose(
@@ -26,17 +37,6 @@ def img_transform(cfg):
     return transform
 
 
-def get_episodes_length(dataset, episodes):
-    col_name = "episode_idx" if "episode_idx" in dataset.column_names else "ep_idx"
-
-    episode_idx = dataset.get_col_data(col_name)
-    step_idx = dataset.get_col_data("step_idx")
-    lengths = []
-    for ep_id in episodes:
-        lengths.append(np.max(step_idx[episode_idx == ep_id]) + 1)
-    return np.array(lengths)
-
-
 def get_dataset(cfg, dataset_name):
     dataset_path = Path(cfg.cache_dir or swm.data.utils.get_cache_dir())
     dataset = swm.data.HDF5Dataset(
@@ -48,14 +48,14 @@ def get_dataset(cfg, dataset_name):
 
 @hydra.main(version_base=None, config_path="./config/eval", config_name="pusht")
 def run(cfg: DictConfig):
-    """Run evaluation of dinowm vs random policy."""
+    """Evaluate a flat LeWM policy under an FF-JEPA PushT scenario."""
     assert (
         cfg.plan_config.horizon * cfg.plan_config.action_block <= cfg.eval.eval_budget
     ), "Planning horizon must be smaller than or equal to eval_budget"
 
     # create world environment
-    cfg.world.max_episode_steps = 2 * cfg.eval.eval_budget
     world = swm.World(**cfg.world, image_shape=(224, 224))
+    configure_pusht_success(world)
 
     # create the transform
     transform = {
@@ -65,9 +65,6 @@ def run(cfg: DictConfig):
 
     dataset = get_dataset(cfg, cfg.eval.dataset_name)
     stats_dataset = dataset  # get_dataset(cfg, cfg.dataset.stats)
-    col_name = "episode_idx" if "episode_idx" in dataset.column_names else "ep_idx"
-    ep_indices, _ = np.unique(stats_dataset.get_col_data(col_name), return_index=True)
-
     process = {}
     for col in cfg.dataset.keys_to_cache:
         if col in ["pixels"]:
@@ -99,74 +96,71 @@ def run(cfg: DictConfig):
     else:
         policy = swm.policy.RandomPolicy()
 
-    results_path = (
-        Path(swm.data.utils.get_cache_dir(), cfg.policy).parent
-        if cfg.policy != "random"
-        else Path(__file__).parent
-    )
-
-    # sample the episodes and the starting indices
-    episode_len = get_episodes_length(dataset, ep_indices)
-    max_start_idx = episode_len - cfg.eval.goal_offset_steps - 1
-    max_start_idx_dict = {ep_id: max_start_idx[i] for i, ep_id in enumerate(ep_indices)}
-    # Map each dataset row’s episode_idx to its max_start_idx
-    col_name = "episode_idx" if "episode_idx" in dataset.column_names else "ep_idx"
-    max_start_per_row = np.array(
-        [max_start_idx_dict[ep_id] for ep_id in dataset.get_col_data(col_name)]
-    )
-
-    # remove all the lines of dataset for which dataset['step_idx'] > max_start_per_row
-    valid_mask = dataset.get_col_data("step_idx") <= max_start_per_row
-    valid_indices = np.nonzero(valid_mask)[0]
-    print(valid_mask.sum(), "valid starting points found for evaluation.")
-
-    g = np.random.default_rng(cfg.seed)
-    random_episode_indices = g.choice(
-        len(valid_indices) - 1, size=cfg.eval.num_eval, replace=False
-    )
-
-    # sort increasingly to avoid issues with HDF5Dataset indexing
-    random_episode_indices = np.sort(valid_indices[random_episode_indices])
-
-    print(random_episode_indices)
-
-    eval_episodes = dataset.get_row_data(random_episode_indices)[col_name]
-    eval_start_idx = dataset.get_row_data(random_episode_indices)["step_idx"]
-
-    if len(eval_episodes) < cfg.eval.num_eval:
-        raise ValueError("Not enough episodes with sufficient length for evaluation.")
-
     world.set_policy(policy)
 
-    results_path.mkdir(parents=True, exist_ok=True)
+    run_id = make_run_id(cfg.record.env, cfg.record.model, cfg.seed)
+    run_dir, metadata = prepare_run(cfg, run_id, cfg.output.root)
 
-    start_time = time.time()
-    metrics = world.evaluate(
-        dataset=dataset,
-        start_steps=eval_start_idx.tolist(),
-        goal_offset=cfg.eval.goal_offset_steps,
-        eval_budget=cfg.eval.eval_budget,
-        episodes_idx=eval_episodes.tolist(),
-        callables=OmegaConf.to_container(cfg.eval.get("callables"), resolve=True),
-        video=results_path,
-    )
-    end_time = time.time()
-    
-    print(metrics)
+    if cfg.eval.init_mode == "dataset_final":
+        eval_episodes, eval_start_idx = sample_final_windows(
+            dataset,
+            num_eval=cfg.eval.num_eval,
+            goal_offset=cfg.eval.goal_offset_steps,
+            seed=cfg.seed,
+        )
+        metrics = world.evaluate(
+            dataset=dataset,
+            start_steps=eval_start_idx.tolist(),
+            goal_offset=cfg.eval.goal_offset_steps,
+            eval_budget=cfg.eval.eval_budget,
+            episodes_idx=eval_episodes.tolist(),
+            callables=OmegaConf.to_container(cfg.eval.callables, resolve=True),
+            video=run_dir if cfg.eval.save_video else None,
+        )
+    elif cfg.eval.init_mode == "random":
+        goal_states = sample_final_goal_states(dataset, cfg.eval.num_eval, cfg.seed)
+        options = [{"goal_state": goal_state} for goal_state in goal_states]
+        metrics = world.evaluate(
+            episodes=cfg.eval.num_eval,
+            seed=cfg.seed,
+            options=options,
+            reset_mode="wait",
+            video=run_dir if cfg.eval.save_video else None,
+        )
+    else:
+        raise ValueError(f"Unknown eval.init_mode: {cfg.eval.init_mode}")
 
-    results_path = results_path / cfg.output.filename
-    results_path.parent.mkdir(parents=True, exist_ok=True)
+    metrics_serializable = {
+        key: value.tolist() if isinstance(value, np.ndarray) else value
+        for key, value in metrics.items()
+    }
+    result_row = {
+        "env": cfg.record.env,
+        "model": cfg.record.model,
+        "seed": int(cfg.seed),
+        "depth": 0,
+        "horizon": int(cfg.plan_config.horizon * cfg.plan_config.action_block),
+        "intervention": "none",
+        "interference_k": 0,
+        "checkpoint_step": cfg.record.checkpoint_step,
+        "goal_offset": cfg.eval.goal_offset_steps,
+        "budget": int(cfg.eval.eval_budget),
+        "scenario": cfg.eval.name,
+        "run_id": run_id,
+        "git_commit": metadata["git_commit"],
+        "git_dirty": metadata["git_dirty"],
+        "config_hash": metadata["config_hash"],
+        "environment_version": metadata["environment_version"],
+        **metrics_serializable,
+    }
+    validate_result_row(result_row)
+    append_jsonl(run_dir / "results.jsonl", result_row)
+    print(result_row)
 
-    with results_path.open("a") as f:
-        f.write("\n")  # separate from previous runs
+    if "oracle" in world.infos:
+        raise RuntimeError("PushT info must not contain the MiniGrid-only 'oracle' key.")
 
-        f.write("==== CONFIG ====\n")
-        f.write(OmegaConf.to_yaml(cfg))
-        f.write("\n")
-
-        f.write("==== RESULTS ====\n")
-        f.write(f"metrics: {metrics}\n")
-        f.write(f"evaluation_time: {end_time - start_time} seconds\n")
+    return result_row
 
 
 if __name__ == "__main__":

@@ -1,0 +1,7 @@
+# @package eval
+name: long
+init_mode: dataset_final
+num_eval: 256
+goal_offset_steps: 75
+eval_budget: 150
+

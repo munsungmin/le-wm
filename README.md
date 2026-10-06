@@ -84,6 +84,33 @@ python eval.py --config-name=pusht.yaml policy=pusht/lewm
 python eval.py --config-name=pusht.yaml policy=pusht/lewm_object.ckpt
 ```
 
+### FF-JEPA PushT protocol
+
+The PushT config includes the three flat-LeWM scenarios used by FF-JEPA. The
+default is `short`; select the others with Hydra:
+
+```bash
+python eval.py scenario=short
+python eval.py scenario=long
+python eval.py scenario=random_init
+```
+
+Each preset evaluates 256 episodes. Short and long start exactly 25 or 75
+environment steps before the final demonstration frame, use a fixed 25-step
+model horizon, and allow budgets of 50 or 150 steps. Random initialization uses
+random environment starts, final states from expert demonstrations as goals,
+and a 300-step budget. The PushT success rule is a T-block position error below
+20 pixels and angle error below 5 degrees.
+
+Every run is written under `results/{env}_{model}_{seed}_{timestamp}/` with the
+resolved `config.yaml`, `metadata.json`, and one JSON object in `results.jsonl`.
+For a retrained checkpoint, override the record fields together with `policy`:
+
+```bash
+python eval.py scenario=short policy=path/to/run \
+  record.model=lewm_retrain record.checkpoint_step=100
+```
+
 ## Pretrained Checkpoints
 
 Pretrained LeWM checkpoints for each environment are mirrored on the Hugging Face

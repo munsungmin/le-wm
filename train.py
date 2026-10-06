@@ -11,7 +11,13 @@ from lightning.pytorch.loggers import WandbLogger
 from omegaconf import OmegaConf, open_dict
 
 from module import SIGReg
-from utils import get_column_normalizer, get_img_preprocessor, SaveCkptCallback
+from records import make_run_id, prepare_run
+from utils import (
+    JsonlMetricsCallback,
+    SaveCkptCallback,
+    get_column_normalizer,
+    get_img_preprocessor,
+)
 
 
 def lejepa_forward(self, batch, stage, cfg):
@@ -105,25 +111,27 @@ def run(cfg):
     ##       training       ##
     ##########################
 
-    run_id = cfg.get("subdir") or ""
-    run_dir = Path(swm.data.utils.get_cache_dir(sub_folder='checkpoints'), run_id)
+    run_id = cfg.get("subdir") or make_run_id(
+        cfg.record.env, cfg.record.model, cfg.seed
+    )
+    with open_dict(cfg):
+        cfg.subdir = run_id
+    checkpoints_root = Path(swm.data.utils.get_cache_dir(sub_folder='checkpoints'))
+    run_dir, _ = prepare_run(cfg, run_id, checkpoints_root)
 
     logger = None
     if cfg.wandb.enabled:
         logger = WandbLogger(**cfg.wandb.config)
         logger.log_hyperparams(OmegaConf.to_container(cfg))
 
-    run_dir.mkdir(parents=True, exist_ok=True)
-    with open(run_dir / "config.yaml", "w") as f:
-        OmegaConf.save(cfg, f)
-
     object_dump_callback = SaveCkptCallback(
-        run_name=cfg.output_model_name, cfg=cfg.model, epoch_interval=1,
+        run_name=run_id, cfg=cfg.model, epoch_interval=1,
     )
+    metrics_callback = JsonlMetricsCallback(run_dir / "metrics.jsonl")
 
     trainer = pl.Trainer(
         **cfg.trainer,
-        callbacks=[object_dump_callback],
+        callbacks=[object_dump_callback, metrics_callback],
         num_sanity_val_steps=1,
         logger=logger,
         enable_checkpointing=True,

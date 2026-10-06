@@ -1,0 +1,7 @@
+# @package eval
+name: random_init
+init_mode: random
+num_eval: 256
+goal_offset_steps: null
+eval_budget: 300
+
