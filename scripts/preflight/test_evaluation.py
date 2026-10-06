@@ -2,7 +2,11 @@ import unittest
 
 import numpy as np
 
-from evaluation import pusht_success, sample_final_goal_states, sample_final_windows
+from scripts.eval.protocol import (
+    pusht_success,
+    sample_final_goal_states,
+    sample_final_windows,
+)
 
 
 class FakeDataset:

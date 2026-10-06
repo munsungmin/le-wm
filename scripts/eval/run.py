@@ -13,12 +13,12 @@ from sklearn import preprocessing
 from torchvision.transforms import v2 as transforms
 import stable_worldmodel as swm
 
-from evaluation import (
+from scripts.eval.protocol import (
     configure_pusht_success,
     sample_final_goal_states,
     sample_final_windows,
 )
-from records import (
+from scripts.utils.records import (
     append_jsonl,
     make_run_id,
     prepare_run,
@@ -161,11 +161,3 @@ def run(cfg: DictConfig):
 
     return result_row
 
-
-@hydra.main(version_base=None, config_path="./config/eval", config_name="pusht")
-def main(cfg: DictConfig):
-    return run(cfg)
-
-
-if __name__ == "__main__":
-    main()

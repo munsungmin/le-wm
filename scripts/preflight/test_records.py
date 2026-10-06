@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 import unittest
 
-from records import REQUIRED_RESULT_FIELDS, make_run_id, validate_result_row
+from scripts.utils.records import REQUIRED_RESULT_FIELDS, make_run_id, validate_result_row
 
 
 class RecordTests(unittest.TestCase):

@@ -1,4 +1,4 @@
 enabled: true
-test_dir: ${hydra:runtime.cwd}/tests
+test_dir: ${hydra:runtime.cwd}/scripts/preflight
 pattern: test_*.py
 verbosity: 2

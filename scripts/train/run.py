@@ -10,14 +10,14 @@ import torch
 from lightning.pytorch.loggers import WandbLogger
 from omegaconf import OmegaConf, open_dict
 
-from module import SIGReg
-from records import make_run_id, prepare_run
-from utils import (
+from scripts.train.module import SIGReg
+from scripts.train.utils import (
     JsonlMetricsCallback,
     SaveCkptCallback,
     get_column_normalizer,
     get_img_preprocessor,
 )
+from scripts.utils.records import make_run_id, prepare_run
 
 
 def lejepa_forward(self, batch, stage, cfg):
@@ -147,11 +147,3 @@ def run(cfg):
     manager()
     return
 
-
-@hydra.main(version_base=None, config_path="./config/train", config_name="lewm")
-def main(cfg):
-    return run(cfg)
-
-
-if __name__ == "__main__":
-    main()
