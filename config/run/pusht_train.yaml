@@ -1,6 +1,7 @@
 # @package _global_
 defaults:
   - /train@_global_: lewm
+  - /preflight: default
   - _self_
 
 task: train

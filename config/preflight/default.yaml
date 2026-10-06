@@ -1,0 +1,4 @@
+enabled: true
+test_dir: ${hydra:runtime.cwd}/tests
+pattern: test_*.py
+verbosity: 2

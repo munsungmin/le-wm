@@ -2,6 +2,7 @@
 
 import contextlib
 import os
+import subprocess
 import sys
 import traceback
 from datetime import datetime, timezone
@@ -50,6 +51,39 @@ def _run_train(cfg: DictConfig):
     from train import run
 
     return run(cfg)
+
+
+def _run_preflight(cfg: DictConfig):
+    if not cfg.preflight.enabled:
+        print("preflight: skipped (preflight.enabled=false)")
+        return
+
+    command = [
+        sys.executable,
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        str(cfg.preflight.test_dir),
+        "-p",
+        str(cfg.preflight.pattern),
+        "-v" if int(cfg.preflight.verbosity) >= 2 else "-q",
+    ]
+    print("preflight:", " ".join(command))
+    completed = subprocess.run(
+        command,
+        cwd=HydraConfig.get().runtime.cwd,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        check=False,
+    )
+    print(completed.stdout, end="")
+    if completed.returncode:
+        raise RuntimeError(
+            f"Preflight tests failed with exit code {completed.returncode}"
+        )
+    print("preflight: passed")
 
 
 def _run_eval(cfg: DictConfig):
@@ -104,6 +138,7 @@ def main(cfg: DictConfig):
         with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
             print(OmegaConf.to_yaml(OmegaConf.create(metadata), resolve=True))
             try:
+                _run_preflight(cfg)
                 if cfg.dry_run:
                     _print_dry_run(cfg)
                     return None
