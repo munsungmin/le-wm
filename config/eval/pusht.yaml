@@ -29,6 +29,9 @@ eval:
   img_size: 224
   dataset_name: pusht_expert_train
   save_video: false
+  success:
+    position_tolerance_px: 20.0
+    angle_tolerance_deg: 5.0
   callables:
     # -- set state
     - method: _set_state

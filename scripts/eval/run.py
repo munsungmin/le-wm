@@ -54,7 +54,11 @@ def run(cfg: DictConfig):
 
     # create world environment
     world = swm.World(**cfg.world, image_shape=(224, 224))
-    configure_pusht_success(world)
+    configure_pusht_success(
+        world,
+        position_tolerance_px=cfg.eval.success.position_tolerance_px,
+        angle_tolerance_deg=cfg.eval.success.angle_tolerance_deg,
+    )
 
     # create the transform
     transform = {
@@ -160,4 +164,3 @@ def run(cfg: DictConfig):
         raise RuntimeError("PushT info must not contain the MiniGrid-only 'oracle' key.")
 
     return result_row
-

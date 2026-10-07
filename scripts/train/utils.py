@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import numpy as np
 import torch
 from stable_pretraining import data as dt
@@ -33,32 +35,34 @@ def get_column_normalizer(dataset, source: str, target: str):
     std = data.std(0, keepdim=True).clone()
     return dt.transforms.WrapTorchTransform(ZScoreNormalizer(mean, std), source=source, target=target)
 
-class SaveCkptCallback(Callback):
-    """Callback to save model checkpoint after each epoch using save_pretrained."""
+class SaveFinalWeightsCallback(Callback):
+    """Export one eval-ready state dict after Lightning training completes."""
 
-    def __init__(self, run_name, cfg, epoch_interval: int = 1):
+    def __init__(
+        self,
+        run_name,
+        cfg,
+        cache_dir,
+        final_name="lewm_retrain",
+    ):
         super().__init__()
         self.run_name = run_name
         self.cfg = cfg
-        self.epoch_interval = epoch_interval
+        self.cache_dir = Path(cache_dir)
+        self.final_name = final_name
 
-    def on_train_epoch_end(self, trainer, pl_module):
-        super().on_train_epoch_end(trainer, pl_module)
-
-        if trainer.is_global_zero:
-            if (trainer.current_epoch + 1) % self.epoch_interval == 0:
-                self._save(pl_module.model, trainer.current_epoch + 1)
-
-            if (trainer.current_epoch + 1) == trainer.max_epochs:
-                self._save(pl_module.model, trainer.current_epoch + 1)
-
-    def _save(self, model, epoch):
+    def on_train_end(self, trainer, pl_module):
+        if not trainer.is_global_zero:
+            return
         from stable_worldmodel.wm.utils import save_pretrained
+
+        final_filename = f"{self.final_name}.pt"
         save_pretrained(
-            model,
+            pl_module.model,
             run_name=self.run_name,
             config=self.cfg,
-            filename=f'weights_epoch_{epoch}.pt',
+            filename=final_filename,
+            cache_dir=str(self.cache_dir),
         )
 
 

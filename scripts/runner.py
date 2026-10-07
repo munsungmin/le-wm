@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from hydra.core.hydra_config import HydraConfig
-from omegaconf import DictConfig, OmegaConf
+from omegaconf import DictConfig, ListConfig, OmegaConf
 
 
 CONFIG_ROOT = Path(__file__).resolve().parents[1] / "config"
@@ -28,6 +28,18 @@ class _Tee:
     def flush(self):
         for stream in self.streams:
             stream.flush()
+
+    def isatty(self):
+        return any(
+            getattr(stream, "isatty", lambda: False)() for stream in self.streams
+        )
+
+    def fileno(self):
+        return self.streams[0].fileno()
+
+    @property
+    def encoding(self):
+        return getattr(self.streams[0], "encoding", "utf-8")
 
 
 def translate_config_flag():
@@ -114,7 +126,14 @@ def run(cfg: DictConfig):
         raise ValueError(f"Unknown task: {cfg.task}")
 
     # Set GPU visibility before importing train/eval (and therefore torch).
-    os.environ["CUDA_VISIBLE_DEVICES"] = str(cfg.gpu)
+    if isinstance(cfg.gpu, (list, tuple, ListConfig)):
+        gpu_ids = [int(gpu_id) for gpu_id in cfg.gpu]
+        gpu_visibility = ",".join(map(str, gpu_ids))
+        gpu_metadata = gpu_ids
+    else:
+        gpu_visibility = str(cfg.gpu)
+        gpu_metadata = int(cfg.gpu)
+    os.environ["CUDA_VISIBLE_DEVICES"] = gpu_visibility
 
     run_dir = Path(HydraConfig.get().runtime.output_dir)
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -124,7 +143,7 @@ def run(cfg: DictConfig):
         "project": str(cfg.project),
         "task": str(cfg.task),
         "seed": int(cfg.seed),
-        "gpu": int(cfg.gpu),
+        "gpu": gpu_metadata,
         "started_at_utc": datetime.now(timezone.utc).isoformat(),
         "run_dir": str(run_dir),
     }

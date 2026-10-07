@@ -5,11 +5,12 @@ from types import MethodType
 import numpy as np
 
 
-POSITION_TOLERANCE_PX = 20.0
-ANGLE_TOLERANCE_DEG = 5.0
-
-
-def pusht_success(goal_state, current_state):
+def pusht_success(
+    goal_state,
+    current_state,
+    position_tolerance_px,
+    angle_tolerance_deg,
+):
     """Return the FF-JEPA PushT success decision and a diagnostic distance."""
     goal_state = np.asarray(goal_state)
     current_state = np.asarray(current_state)
@@ -19,19 +20,30 @@ def pusht_success(goal_state, current_state):
     angle_error = abs(float(goal_state[4] - current_state[4]))
     angle_error = min(angle_error, 2 * np.pi - angle_error)
     success = (
-        position_error < POSITION_TOLERANCE_PX
-        and angle_error < np.deg2rad(ANGLE_TOLERANCE_DEG)
+        position_error <= position_tolerance_px
+        and angle_error <= np.deg2rad(angle_tolerance_deg)
     )
     return bool(success), float(np.linalg.norm(goal_state - current_state))
 
 
-def configure_pusht_success(world):
+def configure_pusht_success(
+    world,
+    position_tolerance_px,
+    angle_tolerance_deg,
+):
     """Install the paper's success predicate on every PushT environment."""
+
+    def eval_state(_self, goal, current):
+        return pusht_success(
+            goal,
+            current,
+            position_tolerance_px,
+            angle_tolerance_deg,
+        )
+
     for wrapped_env in world.envs.envs:
         env = wrapped_env.unwrapped
-        env.eval_state = MethodType(
-            lambda self, goal, current: pusht_success(goal, current), env
-        )
+        env.eval_state = MethodType(eval_state, env)
 
 
 def episode_lengths(dataset, episode_ids):

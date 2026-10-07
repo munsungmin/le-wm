@@ -7,13 +7,14 @@ import lightning as pl
 import stable_pretraining as spt
 import stable_worldmodel as swm
 import torch
+from lightning.pytorch.callbacks import ModelCheckpoint
 from lightning.pytorch.loggers import WandbLogger
 from omegaconf import OmegaConf, open_dict
 
 from scripts.train.module import SIGReg
 from scripts.train.utils import (
     JsonlMetricsCallback,
-    SaveCkptCallback,
+    SaveFinalWeightsCallback,
     get_column_normalizer,
     get_img_preprocessor,
 )
@@ -51,6 +52,17 @@ def lejepa_forward(self, batch, stage, cfg):
     return output
 
 def run(cfg):
+    pl.seed_everything(cfg.seed, workers=True)
+    spt.set(
+        default_callbacks={
+            "sklearn_checkpoint": False,
+            "wandb_checkpoint": False,
+            "trackio_checkpoint": False,
+            "swanlab_checkpoint": False,
+            "hf_checkpoint": False,
+        }
+    )
+
     #########################
     ##       dataset       ##
     #########################
@@ -115,35 +127,65 @@ def run(cfg):
     )
     with open_dict(cfg):
         cfg.subdir = run_id
-    checkpoints_root = Path(swm.data.utils.get_cache_dir(sub_folder='checkpoints'))
+    storage_root = Path(cfg.storage_root)
+    checkpoints_root = storage_root / "checkpoints"
     run_dir, _ = prepare_run(cfg, run_id, checkpoints_root)
 
-    logger = None
+    logger = False
     if cfg.wandb.enabled:
         logger = WandbLogger(**cfg.wandb.config)
-        logger.log_hyperparams(OmegaConf.to_container(cfg))
+        logger.log_hyperparams(OmegaConf.to_container(cfg, resolve=True))
 
-    object_dump_callback = SaveCkptCallback(
-        run_name=run_id, cfg=cfg.model, epoch_interval=1,
+    checkpoint_interval = int(cfg.checkpoint.every_n_epochs)
+    if checkpoint_interval <= 0:
+        raise ValueError("checkpoint.every_n_epochs must be positive")
+    if int(cfg.trainer.max_epochs) % checkpoint_interval:
+        raise ValueError(
+            "trainer.max_epochs must be divisible by checkpoint.every_n_epochs "
+            "so lewm_retrain.ckpt contains the final epoch"
+        )
+
+    resume_checkpoint = run_dir / f"{cfg.checkpoint.final_name}.ckpt"
+    lightning_checkpoint = ModelCheckpoint(
+        dirpath=run_dir,
+        filename=cfg.checkpoint.final_name,
+        every_n_epochs=checkpoint_interval,
+        save_on_train_epoch_end=True,
+        save_top_k=1,
+        save_last=False,
+        enable_version_counter=False,
+    )
+    final_weights_callback = SaveFinalWeightsCallback(
+        run_name=run_id,
+        cfg=cfg.model,
+        cache_dir=storage_root,
+        final_name=cfg.checkpoint.final_name,
     )
     metrics_callback = JsonlMetricsCallback(run_dir / "metrics.jsonl")
 
     trainer = pl.Trainer(
         **cfg.trainer,
-        callbacks=[object_dump_callback, metrics_callback],
+        callbacks=[
+            lightning_checkpoint,
+            final_weights_callback,
+            metrics_callback,
+        ],
         num_sanity_val_steps=1,
         logger=logger,
         enable_checkpointing=True,
     )
 
-    ckpt_path = run_dir / f"{cfg.output_model_name}_weights.ckpt"
-    manager = spt.Manager(
-        trainer=trainer,
-        module=world_model,
-        data=data_module,
-        ckpt_path=ckpt_path if ckpt_path.exists() else None,
+    # stable_pretraining.Module optimizes manually. Preserve Trainer-level
+    # clipping for its training_step, while bypassing Lightning's automatic-
+    # optimization-only validation.
+    if trainer.gradient_clip_val is not None and trainer.gradient_clip_val > 0:
+        trainer.gradient_clip_val_ = trainer.gradient_clip_val
+        trainer.gradient_clip_algorithm_ = trainer.gradient_clip_algorithm
+        trainer.gradient_clip_val = None
+
+    trainer.fit(
+        world_model,
+        datamodule=data_module,
+        ckpt_path=str(resume_checkpoint) if resume_checkpoint.exists() else None,
     )
-
-    manager()
     return
-

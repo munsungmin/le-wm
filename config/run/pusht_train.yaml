@@ -10,7 +10,14 @@ gpu: 0
 seed: 3072
 dry_run: false
 
-subdir: ${project}/train_seed${seed}_${now:%Y%m%dT%H%M%S}
+storage_root: /data/sungmin/lewm
+checkpoint:
+  data: pusht
+  model: lewm
+  final_name: lewm_retrain
+  every_n_epochs: 1
+
+subdir: ${checkpoint.data}/${checkpoint.model}/${now:%Y%m%dT%H%M%S}/${seed}
 
 hydra:
   run:
