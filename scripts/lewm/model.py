@@ -1,5 +1,3 @@
-"""JEPA Implementation"""
-
 import torch
 import torch.nn.functional as F
 from einops import rearrange
@@ -151,3 +149,4 @@ class JEPA(nn.Module):
         cost = self.criterion(info_dict)
         
         return cost
+

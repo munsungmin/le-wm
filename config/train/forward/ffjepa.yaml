@@ -1,0 +1,2 @@
+_target_: scripts.ff_jepa.train.ffjepa_forward
+_partial_: true
