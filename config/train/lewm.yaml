@@ -4,6 +4,7 @@ defaults:
   - data: pusht
   - model: lewm
   - forward: lewm
+  - loss: sigreg
 
 output_model_name: lewm
 subdir: ${hydra:job.id}
@@ -36,9 +37,3 @@ optimizer:
 
 num_preds: 1
 
-loss:
-  sigreg:
-    weight: 0.09
-    kwargs:
-      knots: 17
-      num_proj: 1024
