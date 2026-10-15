@@ -156,7 +156,7 @@ def run(cfg: DictConfig):
 
     results_path = results_path / cfg.output.filename
     results_path.parent.mkdir(parents=True, exist_ok=True)
-
+    
     with results_path.open("a") as f:
         f.write("\n")  # separate from previous runs
 

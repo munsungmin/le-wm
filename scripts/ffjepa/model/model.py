@@ -2,7 +2,7 @@ import torch
 import torch.nn.functional as F
 from einops import rearrange
 from torch import nn
-from scripts.lewm.model import JEPA
+from scripts.lewm.model.model import JEPA
 def detach_clone(v):
     return v.detach().clone() if torch.is_tensor(v) else v
 

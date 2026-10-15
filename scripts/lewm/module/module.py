@@ -2,7 +2,7 @@ import torch
 import torch.nn.functional as F
 from einops import rearrange
 from torch import nn
-from scripts.lewm.utils.transformer import Transformer,ConditionalBlock
+from scripts.lewm.module.utils.transformer import Transformer,ConditionalBlock
 
 class Embedder(nn.Module):
     def __init__(
@@ -90,7 +90,7 @@ class ARPredictor(nn.Module):
             dropout,
             block_class=ConditionalBlock,
         )
-
+    
     def forward(self, x, c):
         """
         x: (B, T, d)
