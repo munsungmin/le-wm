@@ -35,6 +35,7 @@ class Deterministic_planner(ARPredictor):
                         dropout,
                         block_class=Block,
                     )
+            self.num_frames=num_frames
     
 
     def forward(self, x): 
@@ -44,9 +45,9 @@ class Deterministic_planner(ARPredictor):
         x = self.transformer(x)
         pass 
 
-class Diffusion_planner(nn.Module):
-    def __init__(self):
-        pass 
+    def context_size(self):
+        return self.num_frames
 
-    def forward(self, x):
-        pass 
+
+    
+
