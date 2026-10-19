@@ -1,4 +1,0 @@
-_target_: scripts.lewm.utils.loss.SIGREG
-knots: 17
-num_proj: 1024
-

@@ -1,0 +1,7 @@
+planner_emb_MSE:
+  fn:
+    _target_: torch.nn.MSELoss
+
+  inputs:
+    input: planner.pred_emb
+    target: planner.target_emb

@@ -3,12 +3,15 @@ import torch
 def lejepa_forward(self, batch, stage, cfg):
     """encode observations, predict next states, compute losses."""
 
+    # Replace NaN values with 0 (occurs at sequence boundaries)
+    batch["action"] = torch.nan_to_num(batch["action"], 0.0)
+    
+    output = self.model.forward_train(batch, cfg)
+
     ctx_len = cfg.history_size
     n_preds = cfg.num_preds
     lambd = cfg.loss.sigreg.weight
 
-    # Replace NaN values with 0 (occurs at sequence boundaries)
-    batch["action"] = torch.nan_to_num(batch["action"], 0.0)
 
     output = self.model.encode(batch)
 

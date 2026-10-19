@@ -1,3 +1,7 @@
+defaults:
+  - loss: lewm
+  - _self_
+
 _target_: scripts.lewm.model.model.JEPA
 
 encoder:

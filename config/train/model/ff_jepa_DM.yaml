@@ -1,3 +1,7 @@
+defaults:
+  - loss: ffjepa
+  - _self_
+
 _target_: scripts.ffjepa.model.model.ffJEPA_DM
 
 encoder:

@@ -3,8 +3,7 @@ defaults:
   - launcher: local
   - data: pusht
   - model: lewm
-  - forward: lewm
-  - loss: sigreg
+  - forward: lewm 
 
 output_model_name: lewm
 subdir: ${hydra:job.id}

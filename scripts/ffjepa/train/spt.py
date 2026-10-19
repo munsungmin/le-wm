@@ -21,12 +21,11 @@ def ffjepa_det_forward(self, batch, stage, cfg):
             img_batch = batch['pixels']
             output = self.model.encode(img_batch)
             if "det" in name: 
-                ctx_len = cfg.predictor.ctx_len
-                n_preds = cfg.predictor.n_preds
+                ctx_len = cfg.predictor_cfg.ctx_len
+                n_preds = cfg.predictor_cfg.n_preds
                 emb = output["emb"]
-                ctx_emb = emb[:, :ctx_len]
-                tgt_emb = emb[:, ctx_len:]
-                pred_emb = self.model.plan(emb, )                
+                pred_emb = self.model.plan(ctx_emb)
+                                
                 output["ffjepa_det_pred_loss"] = (pred_emb - tgt_emb).pow(2).mean() 
 
 

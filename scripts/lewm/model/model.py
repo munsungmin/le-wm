@@ -2,6 +2,7 @@ import torch
 import torch.nn.functional as F
 from einops import rearrange
 from torch import nn
+from omegaconf import OmegaConf, open_dict
 
 def detach_clone(v):
     return v.detach().clone() if torch.is_tensor(v) else v
@@ -24,6 +25,7 @@ class JEPA(nn.Module):
         self.projector = projector or nn.Identity()
         self.pred_proj = pred_proj or nn.Identity()
 
+    
     def encode(self, info):
         """Encode observations and actions into embeddings.
         info: dict with pixels and action keys
@@ -51,7 +53,59 @@ class JEPA(nn.Module):
         preds = self.pred_proj(rearrange(preds, "b t d -> (b t) d"))
         preds = rearrange(preds, "(b t) d -> b t d", b=emb.size(0))
         return preds
+    
+    def compute_loss(self, info, cfg):
+        loss_dict = OmegaConf.to_container(cfg.loss)
+        for k, v in loss_dict.items():
+            fn = k["fn"]
+        
+    def forward_train(self, batch, cfg):
+        
+        loss_info={}
+        loss_info = self.encode(batch, loss_info)
+        emb = output["emb"]  # (B, T, D)
+        act_emb = output["act_emb"] # (B, T, D) 
+    
+        ctx_emb = emb[:, :ctx_len]
+        ctx_act = act_emb[:, : ctx_len]
+    
+        tgt_emb = emb[:, n_preds:] # label
+        pred_emb = self.model.predict(ctx_emb, ctx_act, loss_info) # pred
 
+        loss_info = self.compute_loss(loss_info)
+        return output
+
+    ####################
+    ## Training only ##
+    ####################
+    def forward_train(self, batch, stage, cfg):
+        ctx_len = cfg.history_size
+        n_preds = cfg.num_preds
+        lambd = cfg.loss.sigreg.weight
+
+        # Replace NaN values with 0 (occurs at sequence boundaries)
+        batch["action"] = torch.nan_to_num(batch["action"], 0.0)
+
+        output = self.model.encode(batch)
+
+        emb = output["emb"]  # (B, T, D)
+        act_emb = output["act_emb"]
+
+        ctx_emb = emb[:, :ctx_len]
+        ctx_act = act_emb[:, : ctx_len]
+
+        tgt_emb = emb[:, n_preds:] # label
+        pred_emb = self.model.predict(ctx_emb, ctx_act) # pred
+
+        # LeWM loss
+        output["pred_loss"] = (pred_emb - tgt_emb).pow(2).mean()
+        output["sigreg_loss"]= self.sigreg(emb.transpose(0, 1))
+        output["loss"] = output["pred_loss"] + lambd * output["sigreg_loss"]  
+
+        losses_dict = {f"{stage}/{k}": v.detach() for k, v in output.items() if "loss" in k}
+        self.log_dict(losses_dict, on_step=True, sync_dist=True)
+        return output
+    
     ####################
     ## Inference only ##
     ####################

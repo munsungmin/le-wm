@@ -8,6 +8,8 @@ def detach_clone(v):
 
 from collections import deque
 
+from omegaconf import OmegaConf, open_dict
+
 class ffJEPA_Det(JEPA):
     def __init__(
             self,
@@ -89,6 +91,17 @@ class ffJEPA_Det(JEPA):
 
 
 class ffJEPA_DM(ffJEPA_Det):
+    
+    ####################
+    ## train only ##
+    ####################
+    
+    def _get_noise(self, emb):
+        noise = None 
+        return noise 
+
+    def get_loss(self, emb ,loss_func):
+        pass
 
     ####################
     ## Inference only ##

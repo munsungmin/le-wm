@@ -1,0 +1,7 @@
+defaults:
+  - term:
+      - predictor_emb_MSE
+      - encoder_emb_sigreg
+  - _self_
+
+weights: [1.0, 0.09]

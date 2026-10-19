@@ -1,0 +1,7 @@
+predictor_emb_MSE:
+  fn:
+    _target_: torch.nn.MSELoss
+
+  inputs:
+    input: predictor.pred_emb
+    target: predictor.target_emb

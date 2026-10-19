@@ -1,0 +1,7 @@
+defaults:
+  - term:
+      - planner_emb_MSE
+      - planner_noise_MSE
+  - _self_
+
+weights: [1.0, 1.0]
