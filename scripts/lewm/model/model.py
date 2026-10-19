@@ -1,8 +1,8 @@
 import torch
 import torch.nn.functional as F
 from einops import rearrange
+from hydra.utils import instantiate
 from torch import nn
-from omegaconf import OmegaConf, open_dict
 
 def detach_clone(v):
     return v.detach().clone() if torch.is_tensor(v) else v
@@ -16,6 +16,7 @@ class JEPA(nn.Module):
         action_encoder,
         projector=None,
         pred_proj=None,
+        loss=None,
     ):
         super().__init__()
 
@@ -25,12 +26,24 @@ class JEPA(nn.Module):
         self.projector = projector or nn.Identity()
         self.pred_proj = pred_proj or nn.Identity()
 
+        self.loss_fns = nn.ModuleDict()
+        self.loss_inputs = {}
+        self.loss_weights = {}
+
+        if loss is not None:
+            terms = loss["term"]
+            weights = loss["weights"]
+            for (name, spec), weight in zip(terms.items(), weights, strict=True):
+                fn = spec["fn"]
+                self.loss_fns[name] = fn if isinstance(fn, nn.Module) else instantiate(fn)
+                self.loss_inputs[name] = dict(spec["inputs"])
+                self.loss_weights[name] = float(weight)
+
     
-    def encode(self, info):
+    def encode(self, info, loss_info=None):
         """Encode observations and actions into embeddings.
         info: dict with pixels and action keys
         """
-
         pixels = info['pixels'].float()
         b = pixels.size(0)
         pixels = rearrange(pixels, "b t ... -> (b t) ...") # flatten for encoding
@@ -38,72 +51,71 @@ class JEPA(nn.Module):
         pixels_emb = output.last_hidden_state[:, 0]  # cls token
         emb = self.projector(pixels_emb)
         info["emb"] = rearrange(emb, "(b t) d -> b t d", b=b)
-
         if "action" in info:
             info["act_emb"] = self.action_encoder(info["action"])
 
+        if loss_info is not None:
+            loss_info["encoder.emb"] = info["emb"].transpose(0, 1)
+
         return info
 
-    def predict(self, emb, act_emb):
+    def predict(self, emb, act_emb , loss_info=None, tgt_emb=None):
         """Predict next state embedding
         emb: (B, T, D)
         act_emb: (B, T, A_emb)
         """
+
         preds = self.predictor(emb, act_emb)
         preds = self.pred_proj(rearrange(preds, "b t d -> (b t) d"))
         preds = rearrange(preds, "(b t) d -> b t d", b=emb.size(0))
+
+        if loss_info is not None:
+            loss_info["predictor.target_emb"] = tgt_emb
+            loss_info["predictor.pred_emb"] = preds
+
         return preds
     
-    def compute_loss(self, info, cfg):
-        loss_dict = OmegaConf.to_container(cfg.loss)
-        for k, v in loss_dict.items():
-            fn = k["fn"]
-        
-    def forward_train(self, batch, cfg):
-        
-        loss_info={}
-        loss_info = self.encode(batch, loss_info)
-        emb = output["emb"]  # (B, T, D)
-        act_emb = output["act_emb"] # (B, T, D) 
-    
-        ctx_emb = emb[:, :ctx_len]
-        ctx_act = act_emb[:, : ctx_len]
-    
-        tgt_emb = emb[:, n_preds:] # label
-        pred_emb = self.model.predict(ctx_emb, ctx_act, loss_info) # pred
+    def _compute_loss(self, info):
+        """Use available tensors; skip disconnected losses during training."""
+        losses = {}
+        total = None
+        for name, fn in self.loss_fns.items():
+            kwargs = {
+                arg: info.get(key)
+                for arg, key in self.loss_inputs[name].items()
+            }
+            if not all(torch.is_tensor(value) for value in kwargs.values()):
+                continue
+            if torch.is_grad_enabled() and not any(
+                value.requires_grad for value in kwargs.values()
+            ):
+                continue
+            value = fn(**kwargs)
+            losses[f"{name}_loss"] = value
+            weighted = self.loss_weights[name] * value
+            total = weighted if total is None else total + weighted
 
-        loss_info = self.compute_loss(loss_info)
-        return output
-
-    ####################
-    ## Training only ##
-    ####################
-    def forward_train(self, batch, stage, cfg):
+        if total is None:
+            raise RuntimeError(
+                "No applicable loss terms: required tensors are missing, "
+                "or disconnected from gradients."
+            )
+        losses["loss"] = total
+        return losses
+        
+    def step(self, batch, cfg):
+        
         ctx_len = cfg.history_size
         n_preds = cfg.num_preds
-        lambd = cfg.loss.sigreg.weight
 
-        # Replace NaN values with 0 (occurs at sequence boundaries)
-        batch["action"] = torch.nan_to_num(batch["action"], 0.0)
+        loss_info={}
+        info = self.encode(batch, loss_info)
+        ctx_emb = info["emb"][:, :ctx_len]
+        tgt_emb = info["emb"][:, n_preds:]
+        ctx_act = info["act_emb"][:, :ctx_len]
+        self.predict(ctx_emb, ctx_act, loss_info, tgt_emb)
 
-        output = self.model.encode(batch)
-
-        emb = output["emb"]  # (B, T, D)
-        act_emb = output["act_emb"]
-
-        ctx_emb = emb[:, :ctx_len]
-        ctx_act = act_emb[:, : ctx_len]
-
-        tgt_emb = emb[:, n_preds:] # label
-        pred_emb = self.model.predict(ctx_emb, ctx_act) # pred
-
-        # LeWM loss
-        output["pred_loss"] = (pred_emb - tgt_emb).pow(2).mean()
-        output["sigreg_loss"]= self.sigreg(emb.transpose(0, 1))
-        output["loss"] = output["pred_loss"] + lambd * output["sigreg_loss"]  
-
-        losses_dict = {f"{stage}/{k}": v.detach() for k, v in output.items() if "loss" in k}
-        self.log_dict(losses_dict, on_step=True, sync_dist=True)
+        output = self._compute_loss(loss_info)
         return output
     
     ####################
@@ -177,7 +189,7 @@ class JEPA(nn.Module):
 
         return cost
 
-    def get_cost(self, info_dict: dict, action_candidates: torch.Tensor):
+    def get_cost(self, info_dict: dict, action_candidates: torch.Tensor, **kwargs):
         """ Compute the cost of action candidates given an info dict with goal and initial state."""
 
         assert "goal" in info_dict, "goal not in info_dict"
@@ -194,13 +206,15 @@ class JEPA(nn.Module):
             if k.startswith("goal_"):
                 goal[k[len("goal_") :]] = goal.pop(k)
 
-        goal.pop("action")
+        goal.pop("action", None)
         goal = self.encode(goal)
 
-        info_dict["goal_emb"] = goal["emb"]
+        info_dict["goal_emb"] = goal["emb"].unsqueeze(1).expand(
+            -1, action_candidates.size(1), -1, -1
+        )
         info_dict = self.rollout(info_dict, action_candidates)
 
-        cost = self._criterion(info_dict)
+        cost = self._criterion(info_dict, **kwargs)
         
         return cost
 

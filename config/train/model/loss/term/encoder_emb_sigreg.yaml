@@ -3,4 +3,4 @@ encoder_emb_sigreg:
     _target_: scripts.lewm.train.loss.SIGReg
 
   inputs:
-    proj: encoder.emb_tbd
+    proj: encoder.emb

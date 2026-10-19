@@ -2,7 +2,7 @@ defaults:
   - loss: ffjepa
   - _self_
 
-_target_: scripts.ffjepa.model.model.ffJEPA_Det
+_target_: scripts.ffjepa.model.model.ffJEPA
 
 encoder:
   _target_: stable_pretraining.backbone.utils.vit_hf

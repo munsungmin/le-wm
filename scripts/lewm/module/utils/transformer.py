@@ -2,7 +2,11 @@ import torch
 import torch.nn.functional as F
 from einops import rearrange
 from torch import nn
-    
+
+def modulate(x, shift, scale):
+    """AdaLN-zero modulation"""
+    return x * (1 + scale) + shift
+
 class FeedForward(nn.Module):
     """FeedForward network used in Transformers"""
 

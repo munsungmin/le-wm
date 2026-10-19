@@ -2,7 +2,7 @@ defaults:
   - loss: ffjepa
   - _self_
 
-_target_: scripts.ffjepa.model.model.ffJEPA_DM
+_target_: scripts.ffjepa.model.model.ffJEPA
 
 encoder:
   _target_: stable_pretraining.backbone.utils.vit_hf
@@ -49,8 +49,8 @@ pred_proj:
     _partial_: true
 
 planner:
-  _target_: scripts.ffjepa.module.module.Diffusion_planner
-  num_frames: ${history_size}
+  _target_: scripts.ffjepa.module.module.DM_planner
+  num_frames: 1
   n_preds : 3 
   input_dim: ${embed_dim}
   hidden_dim: ${embed_dim}

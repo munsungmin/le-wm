@@ -79,6 +79,8 @@ class ff_CEMSolver(CEMSolver):
                     )
                 expanded_infos[k] = v_batch
 
+            self.model.update_history(expanded_infos, start_idx, end_idx)
+
             # Optimization Loop
             final_batch_cost = None
 
@@ -107,7 +109,9 @@ class ff_CEMSolver(CEMSolver):
                 candidates[:, 0] = batch_mean
 
                 # Evaluate candidates
-                costs = self.model.get_cost(expanded_infos, candidates)
+                costs = self.model.get_cost(
+                    expanded_infos, candidates, start_idx=start_idx, end_idx=end_idx
+                )
 
                 assert isinstance(costs, torch.Tensor), (
                     f'Expected cost to be a torch.Tensor, got {type(costs)}'
@@ -170,9 +174,6 @@ class ff_CEMSolver(CEMSolver):
             outputs['costs'].extend(final_batch_cost)
 
     
-        # Difference with CEMSolver
-        self.model.update_history(expanded_infos, start_idx, end_idx)
-
     
         outputs['actions'] = mean.detach().cpu()
         outputs['mean'] = [mean.detach().cpu()]

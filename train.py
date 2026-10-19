@@ -10,7 +10,6 @@ import torch
 from lightning.pytorch.loggers import WandbLogger
 from omegaconf import OmegaConf, open_dict
 
-from scripts.lewm.train.loss import SIGReg
 from utils import get_column_normalizer, get_img_preprocessor, SaveCkptCallback
 
 
@@ -66,7 +65,6 @@ def run(cfg):
     data_module = spt.data.DataModule(train=train, val=val)
     world_model = spt.Module(
         model = world_model,
-        sigreg = SIGReg(**cfg.loss.sigreg.kwargs),
         forward=partial(forward_func, cfg=cfg),
         optim=optimizers,
     )
