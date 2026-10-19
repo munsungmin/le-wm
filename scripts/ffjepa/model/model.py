@@ -19,7 +19,6 @@ class ffJEPA_Det(JEPA):
             pred_proj=None,
             plan_proj=None,
 
-
         ):
             super().__init__(encoder, predictor, action_encoder, projector, pred_proj)
             self.planner = planner
@@ -27,7 +26,10 @@ class ffJEPA_Det(JEPA):
             self.emb_history = None
             self.len_history = torch.planner.context_size()
             
-
+    ####################
+    ## train only ##
+    ####################
+    
     def _plan(self, emb):
         
         preds = self.planner(emb)
@@ -35,10 +37,10 @@ class ffJEPA_Det(JEPA):
         preds = rearrange(preds, "(b t) d -> b t d", b=emb.size(0))
         return preds
 
+
     ####################
     ## Inference only ##
     ####################
-
 
     def update_history(self, info : dict , start_idx, end_idx):
 
@@ -54,7 +56,7 @@ class ffJEPA_Det(JEPA):
             self.emb_history = torch.concat(self.emb_history, _init["emb"], dim=0)
 
         elif start_idx == 0 : 
-            buffer = self.emb_history.new_zeros((self.emb_history.shape(0),1,self.emb_history.shape(2)))
+            buffer = self.emb_history.new_zeros((self.emb_history.shape(0),1,self.emb_history.shape(2),self.emb_history.shape(3)))
             self.emb_history = torch.concat(self.emb_history, buffer)
             self.emb_history[start_idx:end_idx, -1:, :] = _init["emb"]
 
@@ -63,17 +65,10 @@ class ffJEPA_Det(JEPA):
 
     def _get_sub_goal(self, info):
 
-        B, S, T, C, H, W = info['pixel'].shape[:6]
-
-        _init = {k: v[:, 0] for k, v in info.items() if torch.is_tensor(v)}
-        _init = self.encode(_init) # (B, )
-        emb = info["emb"] = _init["emb"].unsqueeze(1).expand(B, S, -1, -1) # (B, S, T, D)
-        _init = {k: detach_clone(v) for k, v in _init.items()} 
-
-        context = self.emb_history[...,-self.len_history:,]
-        seq = self._plan(context) # (B, self.len_history, D)
+        B, S = info['pixels'].shape[:2]
+        context = self.emb_history[...,-self.len_history:,:] 
+        seq = self._plan(context) # (B, 3, D)
         sub_goal = seq[...,-1:,:].unsqueeze(1).expand(B,S,-1,-1) # (B, S, 1 ,D)
-
         return sub_goal
       
     def _criterion(self, info_dict: dict):
@@ -93,7 +88,20 @@ class ffJEPA_Det(JEPA):
         return cost
 
 
+class ffJEPA_DM(ffJEPA_Det):
 
-    
+    ####################
+    ## Inference only ##
+    ####################   
 
+
+    def _get_sub_goal(self, info):
+
+        B, S = info['pixel'].shape[:2]
+        context = self.emb_history[...,-self.len_history:,] 
+        
+        noise = self.planner(context) # (B, 1, D)
+        
+        
+        #sub_goal = seq[...,-1:,:].unsqueeze(1).expand(B,S,-1,-1) # (B, S, 1 ,D)
     

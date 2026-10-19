@@ -18,7 +18,7 @@ def ffjepa_det_forward(self, batch, stage, cfg):
     predictor_cfg = OmegaConf.to_container(cfg.predictor, resolve=True)
     for name, predictor_sub_cfg in predictor_cfg.items():
         if "ff" in name:  
-            img_batch = batch['pixel']
+            img_batch = batch['pixels']
             output = self.model.encode(img_batch)
             if "det" in name: 
                 ctx_len = cfg.predictor.ctx_len

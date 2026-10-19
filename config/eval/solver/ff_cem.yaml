@@ -1,0 +1,5 @@
+defaults:
+  - cem
+  - _self_
+
+_target_: scripts.ffjepa.eval.solver.ff_CEMSolver

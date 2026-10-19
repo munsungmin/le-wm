@@ -107,7 +107,7 @@ class JEPA(nn.Module):
 
         return info
 
-    def criterion(self, info_dict: dict):
+    def _criterion(self, info_dict: dict):
         """Compute the cost between predicted embeddings and goal embeddings."""
         pred_emb = info_dict["predicted_emb"]  # (B, S, T-1, dim)
         goal_emb = info_dict["goal_emb"]  # (B, S, T, dim)
@@ -146,7 +146,7 @@ class JEPA(nn.Module):
         info_dict["goal_emb"] = goal["emb"]
         info_dict = self.rollout(info_dict, action_candidates)
 
-        cost = self.criterion(info_dict)
+        cost = self._criterion(info_dict)
         
         return cost
 

@@ -3,7 +3,10 @@ import torch
 import torch.nn.functional as F
 from einops import rearrange
 from torch import nn 
-from scripts.lewm.module.module import Transformer, ARPredictor, Block
+from scripts.lewm.module.module import Transformer, ARPredictor
+from scripts.lewm.module.utils.transformer import Block
+
+
 def detach_clone(v):
     return v.detach().clone() if torch.is_tensor(v) else v
 
@@ -43,7 +46,7 @@ class Deterministic_planner(ARPredictor):
         x = x + self.pos_embedding[:, :T]
         x = self.dropout(x)
         x = self.transformer(x)
-        pass 
+        return x 
 
     def context_size(self):
         return self.num_frames

@@ -1,4 +1,4 @@
-_target_: jepa.ffJEPA
+_target_: scripts.ffjepa.model.model.ffJEPA_Det
 
 encoder:
   _target_: stable_pretraining.backbone.utils.vit_hf
@@ -9,7 +9,7 @@ encoder:
   use_mask_token: false
 
 predictor:
-  _target_: module.ARPredictor
+  _target_: scripts.lewm.module.module.ARPredictor
   num_frames: ${history_size}
   input_dim: ${embed_dim}
   hidden_dim: ${embed_dim}
@@ -22,12 +22,12 @@ predictor:
   emb_dropout: 0.0
 
 action_encoder:
-  _target_: module.Embedder
+  _target_: scripts.lewm.module.module.Embedder
   input_dim: ???
   emb_dim: ${embed_dim}
 
 projector:
-  _target_: module.MLP
+  _target_: scripts.lewm.module.module.MLP
   input_dim: ${embed_dim}
   output_dim: ${embed_dim}
   hidden_dim: 2048
@@ -36,7 +36,7 @@ projector:
     _partial_: true
 
 pred_proj:
-  _target_: module.MLP
+  _target_: scripts.lewm.module.module.MLP
   input_dim: ${embed_dim}
   output_dim: ${embed_dim}
   hidden_dim: 2048
@@ -45,8 +45,9 @@ pred_proj:
     _partial_: true
 
 planner:
-  _target_: module.Deterministic_planner
-  num_frames: ${history_size}
+  _target_: scripts.ffjepa.module.module.Deterministic_planner
+  num_frames: 3
+  n_preds : 1
   input_dim: ${embed_dim}
   hidden_dim: ${embed_dim}
   output_dim: ${embed_dim}
@@ -56,5 +57,3 @@ planner:
   dim_head: 64
   dropout: 0.1
   emb_dropout: 0.0
-
-  
