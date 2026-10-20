@@ -34,6 +34,7 @@ class Deterministic_planner(ARPredictor):
             dropout=0.0,
             emb_dropout=0.0,
             block_class=Block,
+            frameskip=25,
         ):
             super().__init__(
                 num_frames=num_frames,
@@ -46,6 +47,8 @@ class Deterministic_planner(ARPredictor):
                 dim_head=dim_head,
                 dropout=dropout,
                 emb_dropout=emb_dropout,
+                n_preds=n_preds,
+                frameskip=frameskip,
             )
             self.transformer = Transformer(
                         input_dim,

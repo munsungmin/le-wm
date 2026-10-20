@@ -13,7 +13,6 @@ class ffJEPA(JEPA):
             predictor,
             action_encoder,
             planner,
-            loss=None,
             projector=None,
             pred_proj=None,
             plan_proj=None,
@@ -25,7 +24,6 @@ class ffJEPA(JEPA):
                 action_encoder=action_encoder,
                 projector=projector,
                 pred_proj=pred_proj,
-                loss=loss,
             )
             self.planner = planner
             self.plan_proj = plan_proj or nn.Identity() 
@@ -41,8 +39,7 @@ class ffJEPA(JEPA):
         loss_info={}
         out = self.encode(batch, loss_info)
         self.planner.step(out["emb"], loss_info)
-        output = self._compute_loss(loss_info)
-        return output
+        return loss_info
 
     ####################
     ## Inference only ##
@@ -58,6 +55,7 @@ class ffJEPA(JEPA):
 
     def update_history(self, info: dict, start_idx, end_idx):
         _init = {k: v[:, 0] for k, v in info.items() if torch.is_tensor(v)}
+        _init.pop("action", None)
         _init = self.encode(_init)
 
         if self.emb_history is None:

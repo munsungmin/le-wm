@@ -1,7 +1,6 @@
 import torch
 import torch.nn.functional as F
 from einops import rearrange
-from hydra.utils import instantiate
 from torch import nn
 
 def detach_clone(v):
@@ -16,7 +15,6 @@ class JEPA(nn.Module):
         action_encoder,
         projector=None,
         pred_proj=None,
-        loss=None,
     ):
         super().__init__()
 
@@ -26,20 +24,10 @@ class JEPA(nn.Module):
         self.projector = projector or nn.Identity()
         self.pred_proj = pred_proj or nn.Identity()
 
-        self.loss_fns = nn.ModuleDict()
-        self.loss_inputs = {}
-        self.loss_weights = {}
+    def load_checkpoint(self):
+        pass
 
-        if loss is not None:
-            terms = loss["term"]
-            weights = loss["weights"]
-            for (name, spec), weight in zip(terms.items(), weights, strict=True):
-                fn = spec["fn"]
-                self.loss_fns[name] = fn if isinstance(fn, nn.Module) else instantiate(fn)
-                self.loss_inputs[name] = dict(spec["inputs"])
-                self.loss_weights[name] = float(weight)
-
-    
+        
     def encode(self, info, loss_info=None):
         """Encode observations and actions into embeddings.
         info: dict with pixels and action keys
@@ -75,34 +63,6 @@ class JEPA(nn.Module):
 
         return preds
     
-    def _compute_loss(self, info):
-        """Use available tensors; skip disconnected losses during training."""
-        losses = {}
-        total = None
-        for name, fn in self.loss_fns.items():
-            kwargs = {
-                arg: info.get(key)
-                for arg, key in self.loss_inputs[name].items()
-            }
-            if not all(torch.is_tensor(value) for value in kwargs.values()):
-                continue
-            if torch.is_grad_enabled() and not any(
-                value.requires_grad for value in kwargs.values()
-            ):
-                continue
-            value = fn(**kwargs)
-            losses[f"{name}_loss"] = value
-            weighted = self.loss_weights[name] * value
-            total = weighted if total is None else total + weighted
-
-        if total is None:
-            raise RuntimeError(
-                "No applicable loss terms: required tensors are missing, "
-                "or disconnected from gradients."
-            )
-        losses["loss"] = total
-        return losses
-        
     def step(self, batch, cfg):
         
         ctx_len = cfg.history_size
@@ -115,8 +75,7 @@ class JEPA(nn.Module):
         ctx_act = info["act_emb"][:, :ctx_len]
         self.predict(ctx_emb, ctx_act, loss_info, tgt_emb)
 
-        output = self._compute_loss(loss_info)
-        return output
+        return loss_info
     
     ####################
     ## Inference only ##

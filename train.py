@@ -10,11 +10,28 @@ import torch
 from lightning.pytorch.loggers import WandbLogger
 from omegaconf import OmegaConf, open_dict
 
+from scripts.lewm.train.loss import Loss
 from utils import get_column_normalizer, get_img_preprocessor, SaveCkptCallback
 
 
 @hydra.main(version_base=None, config_path="./config/train", config_name="lewm")
 def run(cfg):
+
+    ##############################
+    ##          model           ##
+    ##############################
+    world_model = hydra.utils.instantiate(cfg.model)
+    load_cfg = OmegaConf.to_container(cfg.init, resolve=True)
+    if load_cfg:
+        pretrained = swm.wm.utils.load_pretrained(
+            load_cfg["path"], cache_dir=load_cfg["cache_dir"]
+        )
+        for name in load_cfg["module"]:
+            getattr(world_model, name).load_state_dict(
+                getattr(pretrained, name).state_dict()
+            )
+        del pretrained
+
     #########################
     ##       dataset       ##
     #########################
@@ -33,9 +50,6 @@ def run(cfg):
                 continue
             normalizer = get_column_normalizer(dataset, col, col)
             transforms.append(normalizer)
-
-        cfg.model.action_encoder.input_dim = cfg.data.dataset.frameskip * dataset.get_dim("action")
-
     transform = spt.data.transforms.Compose(*transforms)
     dataset.transform = transform
 
@@ -51,7 +65,6 @@ def run(cfg):
     ##       model / optim      ##
     ##############################
 
-    world_model = hydra.utils.instantiate(cfg.model)
 
     optimizers = {
         'model_opt': {
@@ -65,6 +78,7 @@ def run(cfg):
     data_module = spt.data.DataModule(train=train, val=val)
     world_model = spt.Module(
         model = world_model,
+        loss=Loss(cfg.loss),
         forward=partial(forward_func, cfg=cfg),
         optim=optimizers,
     )

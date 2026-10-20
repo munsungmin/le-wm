@@ -1,0 +1,8 @@
+path: "pusht/lewm" 
+cache_dir: ${path.project}
+module:
+  - encoder 
+  - predictor 
+  - action_encoder 
+  - projector
+  - pred_proj

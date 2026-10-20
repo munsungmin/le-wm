@@ -1,13 +1,7 @@
+available_keys: [pixels, action, proprio, state]
 dataset:
-  num_steps: ${eval:'${num_preds} + ${history_size}'}
-  frameskip: 5
+  num_steps: ???
+  frameskip: ???
   name: pusht_expert_train.lance
-  keys_to_load:
-    - pixels
-    - action
-    - proprio
-    - state
-  keys_to_cache:
-    - action
-    - proprio
-    - state
+  keys_to_load: ${eval:'[k for k in ${data.available_keys} if k in ${data.keys_from_model}]'}
+  keys_to_cache: ${eval:'[k for k in ${data.dataset.keys_to_load} if not k.startswith("pixels")]'}

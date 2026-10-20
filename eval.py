@@ -49,10 +49,6 @@ def get_dataset(cfg, dataset_name):
 @hydra.main(version_base=None, config_path="./config/eval", config_name="pusht")
 def run(cfg: DictConfig):
     """Run evaluation of dinowm vs random policy."""
-    assert (
-        cfg.plan_config.horizon * cfg.plan_config.action_block <= cfg.eval.eval_budget
-    ), "Planning horizon must be smaller than or equal to eval_budget"
-
     # create world environment
     cfg.world.max_episode_steps = 2 * cfg.eval.eval_budget
     world = swm.World(**cfg.world, image_shape=(224, 224))
@@ -90,6 +86,10 @@ def run(cfg: DictConfig):
         model = model.eval()
         model.requires_grad_(False)
         model.interpolate_pos_encoding = True
+        cfg.plan_config.action_block = model.predictor.frameskip
+        assert (
+            cfg.plan_config.horizon * cfg.plan_config.action_block <= cfg.eval.eval_budget
+        ), "Planning horizon must be smaller than or equal to eval_budget"
         config = swm.PlanConfig(**cfg.plan_config)
         solver = hydra.utils.instantiate(cfg.solver, model=model)
         policy = swm.policy.WorldModelPolicy(

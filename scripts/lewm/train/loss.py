@@ -1,7 +1,48 @@
+import hydra
 import torch
 from torch import nn
 import torch.nn.functional as F
 from einops import rearrange
+
+
+class Loss(torch.nn.Module):
+    def __init__(self, cfg):
+        super().__init__()
+        self.fns = torch.nn.ModuleDict()
+        self.inputs = {}
+        self.weights = {}
+        for (name, spec), weight in zip(cfg.term.items(), cfg.weights, strict=True):
+            self.fns[name] = hydra.utils.instantiate(spec.fn)
+            self.inputs[name] = dict(spec.inputs)
+            self.weights[name] = float(weight)
+
+    def forward(self, info):
+        losses = {}
+        total = None
+        for name, fn in self.fns.items():
+            kwargs = {
+                arg: info.get(key)
+                for arg, key in self.inputs[name].items()
+            }
+            if not all(torch.is_tensor(value) for value in kwargs.values()):
+                continue
+            if torch.is_grad_enabled() and not any(
+                value.requires_grad for value in kwargs.values()
+            ):
+                continue
+            value = fn(**kwargs)
+            losses[f"{name}_loss"] = value
+            weighted = self.weights[name] * value
+            total = weighted if total is None else total + weighted
+
+        if total is None:
+            raise RuntimeError(
+                "No applicable loss terms: required tensors are missing, "
+                "or disconnected from gradients."
+            )
+        losses["loss"] = total
+        return losses
+
 
 def modulate(x, shift, scale):
     """AdaLN-zero modulation"""

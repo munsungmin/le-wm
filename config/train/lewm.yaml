@@ -1,9 +1,18 @@
 defaults:
-  - _self_
   - launcher: local
   - data: pusht
+  - forward: le_jepa
   - model: lewm
-  - forward: lewm 
+  - init: random
+  - _self_
+
+data:
+  dataset:
+    num_steps: ${eval:'${model.predictor.num_frames} + ${model.predictor.n_preds}'}
+    frameskip: ${model.predictor.frameskip}
+
+path:
+  project: "/data/sungmin/AutoJEPA"
 
 output_model_name: lewm
 subdir: ${hydra:job.id}
@@ -13,7 +22,6 @@ train_split: 0.9
 seed: 3072
 img_size: 224
 embed_dim: 192
-history_size: 3
 
 trainer:
   max_epochs: 100
@@ -33,6 +41,4 @@ optimizer:
   type: AdamW
   lr: 5e-5
   weight_decay: 1e-3
-
-num_preds: 1
 

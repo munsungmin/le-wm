@@ -75,8 +75,12 @@ class ARPredictor(nn.Module):
         dim_head=64,
         dropout=0.0,
         emb_dropout=0.0,
+        n_preds=1,
+        frameskip=5,
     ):
         super().__init__()
+        self.n_preds = n_preds
+        self.frameskip = frameskip
         self.pos_embedding = nn.Parameter(torch.randn(1, num_frames, input_dim))
         self.dropout = nn.Dropout(emb_dropout)
         self.transformer = Transformer(

@@ -1,0 +1,44 @@
+defaults:
+  - launcher: local
+  - data: pusht
+  - forward: le_jepa 
+  - model: ff_jepa
+  - init: lewm
+  - _self_
+
+data:
+  dataset:
+    num_steps: ${eval:'${model.planner.num_frames} + ${model.planner.n_preds}'}
+    frameskip: ${model.planner.frameskip}
+
+path:
+  project: "/data/sungmin/AutoJEPA"
+
+output_model_name: ffjepa_Det
+subdir: ${hydra:job.id}
+
+num_workers: 6
+train_split: 0.9
+seed: 3072
+img_size: 224
+embed_dim: 192
+
+trainer:
+  max_epochs: 100
+  devices: auto
+  accelerator: gpu
+  precision: bf16
+  gradient_clip_val: 1.0
+
+loader:
+  batch_size: 128
+  num_workers: ${num_workers}
+  persistent_workers: True
+  prefetch_factor: 3
+  pin_memory: True
+
+optimizer:
+  type: AdamW
+  lr: 5e-5
+  weight_decay: 1e-3
+

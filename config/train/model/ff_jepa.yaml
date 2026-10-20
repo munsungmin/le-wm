@@ -1,0 +1,8 @@
+defaults:
+  - lewm
+  - planner: Det
+  - override /loss@_global_.loss: ffjepa
+  - override /data/input_spec@_global_.data: ff_jepa
+  - _self_
+
+_target_: scripts.ffjepa.model.model.ffJEPA
