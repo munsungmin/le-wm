@@ -1,3 +1,6 @@
+env: pusht
+environment_id: swm/PushT-v1
+environment_package: stable-worldmodel
 available_keys: [pixels, action, proprio, state]
 dataset:
   num_steps: ???

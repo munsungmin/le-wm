@@ -1,3 +1,6 @@
+env: reacher
+environment_id: swm/ReacherDMControl-v0
+environment_package: stable-worldmodel
 available_keys: [pixels, action, observation]
 dataset:
   num_steps: ${eval:'${num_preds} + ${history_size}'}

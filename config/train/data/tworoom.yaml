@@ -1,3 +1,6 @@
+env: tworoom
+environment_id: swm/TwoRoom-v1
+environment_package: stable-worldmodel
 available_keys: [pixels, action, proprio]
 dataset:
   num_steps: ${eval:'${num_preds} + ${history_size}'}

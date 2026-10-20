@@ -1,6 +1,5 @@
 import os
 from functools import partial
-from pathlib import Path
 
 import hydra
 import lightning as pl
@@ -8,20 +7,38 @@ import stable_pretraining as spt
 import stable_worldmodel as swm
 import torch
 from lightning.pytorch.loggers import WandbLogger
+from lightning.pytorch.callbacks import ModelCheckpoint
 from omegaconf import OmegaConf, open_dict
 
 from scripts.lewm.train.loss import Loss
-from utils import get_column_normalizer, get_img_preprocessor, SaveCkptCallback
+from scripts.utils.callbacks import SaveCkptCallback
+from scripts.utils.loggers import JsonLogger
+from scripts.utils.runs import finish_run, prepare_run
+from scripts.utils.utils import get_column_normalizer, get_img_preprocessor
 
 
 @hydra.main(version_base=None, config_path="./config/train", config_name="lewm")
 def run(cfg):
+    cfg, run_dir, ckpt_path = prepare_run(cfg)
+    try:
+        trainer = train(cfg, run_dir, ckpt_path)
+    except BaseException as exc:
+        finish_run(run_dir, "interrupted" if isinstance(exc, KeyboardInterrupt) else "failed")
+        raise
+    else:
+        finish_run(run_dir, "interrupted" if trainer.interrupted else "completed")
+    finally:
+        os.environ.pop("LEWM_RUN_TIMESTAMP", None)
+
+
+def train(cfg, run_dir, ckpt_path):
+    pl.seed_everything(cfg.seed, workers=True)
 
     ##############################
     ##          model           ##
     ##############################
     world_model = hydra.utils.instantiate(cfg.model)
-    load_cfg = OmegaConf.to_container(cfg.init, resolve=True)
+    load_cfg = OmegaConf.to_container(cfg.init, resolve=True) if ckpt_path is None else None
     if load_cfg:
         pretrained = swm.wm.utils.load_pretrained(
             load_cfg["path"], cache_dir=load_cfg["cache_dir"]
@@ -87,40 +104,39 @@ def run(cfg):
     ##       training       ##
     ##########################
 
-    run_id = cfg.get("subdir") or ""
-    run_dir = Path(swm.data.utils.get_cache_dir(sub_folder='checkpoints'), run_id)
-
-    logger = None
+    loggers = [JsonLogger(save_dir=run_dir, epoch_only=True)]
     if cfg.wandb.enabled:
-        logger = WandbLogger(**cfg.wandb.config)
-        logger.log_hyperparams(OmegaConf.to_container(cfg))
-
-    run_dir.mkdir(parents=True, exist_ok=True)
-    with open(run_dir / "config.yaml", "w") as f:
-        OmegaConf.save(cfg, f)
+        wandb_config = OmegaConf.to_container(cfg.wandb.config, resolve=True)
+        wandb_config.update(name=cfg.run_id, id=cfg.run_id, save_dir=str(run_dir))
+        loggers.append(WandbLogger(**wandb_config))
+    for logger in loggers:
+        logger.log_hyperparams(OmegaConf.to_container(cfg, resolve=True))
 
     object_dump_callback = SaveCkptCallback(
-        run_name=cfg.output_model_name, cfg=cfg.model, epoch_interval=1,
+        run_name="", cfg=cfg.model, epoch_interval=1, cache_dir=str(run_dir),
+    )
+    resume_callback = ModelCheckpoint(
+        dirpath=run_dir / "checkpoints",
+        filename="last",
+        save_top_k=1,
+        save_last=False,
+        save_weights_only=False,
+        every_n_epochs=1,
+        save_on_train_epoch_end=True,
+        enable_version_counter=False,
     )
 
     trainer = pl.Trainer(
         **cfg.trainer,
-        callbacks=[object_dump_callback],
+        default_root_dir=str(run_dir),
+        callbacks=[object_dump_callback, resume_callback],
         num_sanity_val_steps=1,
-        logger=logger,
+        logger=loggers,
         enable_checkpointing=True,
     )
 
-    ckpt_path = run_dir / f"{cfg.output_model_name}_weights.ckpt"
-    manager = spt.Manager(
-        trainer=trainer,
-        module=world_model,
-        data=data_module,
-        ckpt_path=ckpt_path if ckpt_path.exists() else None,
-    )
-
-    manager()
-    return
+    trainer.fit(world_model, datamodule=data_module, ckpt_path=ckpt_path)
+    return trainer
 
 
 if __name__ == "__main__":

@@ -4,12 +4,26 @@
 defaults:
   - override /hydra/launcher: basic
 
+run_timestamp: ${utc_timestamp:}
+run_id: ${data.env}_${output_model_name}_${seed}_${run_timestamp}
+run_dir: ${experiment_dir:${output_root},${run_id},${resume_dir}}
+
+hydra:
+  run:
+    dir: ${run_dir}
+  sweep:
+    dir: ${output_root}
+    subdir: ${run_id}
+  job:
+    chdir: False
+
 wandb:
-  enabled: False
+  enabled: True
   config:
     entity: lewm
     project: lewm
-    name: ${output_model_name}
-    id: ${subdir}
+    name: ${run_id}
+    id: ${run_id}
     resume: allow
     log_model: False
+    save_dir: ${run_dir}

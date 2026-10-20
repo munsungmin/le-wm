@@ -11,5 +11,12 @@ def lejepa_forward(self, batch, stage, cfg):
     output = self.loss(info)
 
     losses_dict = {f"{stage}/{k}": v.detach() for k, v in output.items() if "loss" in k}
-    self.log_dict(losses_dict, on_step=True, sync_dist=True)
+    self.log_dict(
+        losses_dict,
+        on_step=False,
+        on_epoch=True,
+        reduce_fx="mean",
+        batch_size=batch["pixels"].size(0),
+        sync_dist=True,
+    )
     return output

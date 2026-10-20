@@ -1,21 +1,10 @@
 defaults:
-  - launcher: local
-  - data: pusht
-  - forward: le_jepa 
-  - model: ff_jepa
-  - init: lewm
+  - lewm
+  - override model: ff_jepa
+  - override init: lewm
   - _self_
 
-data:
-  dataset:
-    num_steps: ${eval:'${model.planner.num_frames} + ${model.planner.n_preds}'}
-    frameskip: ${model.planner.frameskip}
-
-path:
-  project: "/data/sungmin/AutoJEPA"
-
-output_model_name: ffjepa_Det
-subdir: ${hydra:job.id}
+output_model_name: ffjepa_${hydra:runtime.choices.model/planner}
 
 num_workers: 6
 train_split: 0.9

@@ -1,3 +1,6 @@
+env: cube
+environment_id: swm/OGBCube-v0
+environment_package: stable-worldmodel
 available_keys: [pixels, action, observation]
 dataset:
   name: ogbench/cube_single_expert.h5

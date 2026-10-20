@@ -1,1 +1,4 @@
 keys_from_model: [pixels, action]
+dataset:
+  num_steps: ${eval:'${model.predictor.num_frames} + ${model.predictor.n_preds}'}
+  frameskip: ${model.predictor.frameskip}

@@ -1,1 +1,4 @@
 keys_from_model: [pixels]
+dataset:
+  num_steps: ${eval:'${model.planner.num_frames} + ${model.planner.n_preds}'}
+  frameskip: ${model.planner.frameskip}
