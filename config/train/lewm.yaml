@@ -6,9 +6,6 @@ defaults:
   - init: random
   - _self_
 
-#commons 
-path:
-  project: "/data/sungmin/AutoJEPA/${output_model_name}/"
 
 #variables 
 output_model_name: lewm

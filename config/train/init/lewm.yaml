@@ -1,8 +1,9 @@
 path: "pusht/lewm" 
-cache_dir: ${path.project}
+cache_dir: ???
 module:
   - encoder 
   - predictor 
   - action_encoder 
   - projector
   - pred_proj
+freeze: [True, True, True, True, True]

@@ -1,9 +1,10 @@
 path: "pusht/ffjepa" 
-cache_dir: ${path.project}
+cache_dir: ???
 module:
   - encoder 
   - predictor 
   - action_encoder 
   - projector
   - pred_proj
-  - planner
+  - planner 
+freeze: [True, True, True, True, True, True]

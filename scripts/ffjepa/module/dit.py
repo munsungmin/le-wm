@@ -142,6 +142,58 @@ class FinalLayer(nn.Module):
         return x
 
 
+class LatentDiT(nn.Module):
+    """DiT blocks for future latent tokens, conditioned on observed latents."""
+
+    def __init__(
+        self, input_dim, hidden_size, num_frames, num_steps, depth, num_heads,
+        mlp_dim, dim_head=64, dropout=0.0, emb_dropout=0.0,
+    ):
+        super().__init__()
+        self.x_embedder = nn.Linear(input_dim, hidden_size)
+        self.context_embedder = nn.Linear(num_frames * input_dim, hidden_size)
+        self.t_embedder = TimestepEmbedder(hidden_size)
+        positions = get_1d_sincos_pos_embed_from_grid(hidden_size, np.arange(num_steps))
+        self.pos_embed = nn.Parameter(
+            torch.from_numpy(positions).float().unsqueeze(0), requires_grad=False
+        )
+        self.dropout = nn.Dropout(emb_dropout)
+        self.blocks = nn.ModuleList([
+            DiTBlock(
+                hidden_size, num_heads, mlp_ratio=mlp_dim / hidden_size,
+                attn_head_dim=dim_head, attn_drop=dropout, proj_drop=dropout,
+            )
+            for _ in range(depth)
+        ])
+        self.final_layer = FinalLayer(hidden_size, patch_size=1, out_channels=input_dim)
+        self.initialize_weights()
+
+    def initialize_weights(self):
+        def basic_init(module):
+            if isinstance(module, nn.Linear):
+                nn.init.xavier_uniform_(module.weight)
+                if module.bias is not None:
+                    nn.init.zeros_(module.bias)
+
+        self.apply(basic_init)
+        nn.init.normal_(self.t_embedder.mlp[0].weight, std=0.02)
+        nn.init.normal_(self.t_embedder.mlp[2].weight, std=0.02)
+        for block in self.blocks:
+            nn.init.zeros_(block.adaLN_modulation[-1].weight)
+            nn.init.zeros_(block.adaLN_modulation[-1].bias)
+        nn.init.zeros_(self.final_layer.adaLN_modulation[-1].weight)
+        nn.init.zeros_(self.final_layer.adaLN_modulation[-1].bias)
+        nn.init.zeros_(self.final_layer.linear.weight)
+        nn.init.zeros_(self.final_layer.linear.bias)
+
+    def forward(self, x, t, context):
+        x = self.dropout(self.x_embedder(x) + self.pos_embed)
+        condition = self.t_embedder(t) + self.context_embedder(context.flatten(1))
+        for block in self.blocks:
+            x = block(x, condition)
+        return self.final_layer(x, condition)
+
+
 class DiT(nn.Module):
     """
     Diffusion model with a Transformer backbone.

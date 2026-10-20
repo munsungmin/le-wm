@@ -1,14 +1,13 @@
-planner:
-  _target_: scripts.ffjepa.module.module.DM_planner
-  num_frames: 1
-  n_preds : 3 
-  frameskip : 25
-  input_dim: ${embed_dim}
-  hidden_dim: ${embed_dim}
-  output_dim: ${embed_dim}
-  depth: 6
-  heads: 16
-  mlp_dim: 2048
-  dim_head: 64
-  dropout: 0.1
-  emb_dropout: 0.0
+_target_: scripts.ffjepa.module.module.DM_planner
+num_frames: 1
+n_preds : 3
+frameskip : 25
+input_dim: ${embed_dim}
+hidden_dim: 384 #Dit-s 설정 참고
+output_dim: ${embed_dim}
+depth: 12
+heads: 16
+mlp_dim: 2048
+dim_head: 64
+dropout: 0.1
+emb_dropout: 0.0

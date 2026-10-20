@@ -5,6 +5,7 @@ from einops import rearrange
 from torch import nn 
 from scripts.lewm.module.module import Transformer, ARPredictor
 from scripts.lewm.module.utils.transformer import Block
+from .dit import LatentDiT
 from .diffusion.gaussian_diffusion import (
     GaussianDiffusion,
     LossType,
@@ -65,10 +66,8 @@ class Deterministic_planner(ARPredictor):
             self.n_preds=n_preds
     
     def step(self, emb, info):
-        if emb.size(1) < self.num_frames + self.n_preds:
-            raise ValueError("Not enough embeddings for the planner context and targets.")
         ctx_emb = emb[:,:self.num_frames]
-        tgt_emb = emb[:,self.n_preds:self.n_preds + self.num_frames]
+        tgt_emb = emb[:,self.n_preds:]
         info["planner.pred_emb"] = self._forward(ctx_emb)
         info["planner.target_emb"] = tgt_emb
         return info
@@ -83,33 +82,48 @@ class Deterministic_planner(ARPredictor):
     def sample(self, x):
         return self._forward(x)
 
-class _DiffusionBlock(Block):
-    def forward(self, x):
-        x = x + self.attn(self.norm1(x), causal=False)
-        return x + self.mlp(self.norm2(x))
-
-
-class DM_planner(Deterministic_planner):
+class DM_planner(nn.Module):
     """Conditional epsilon prediction over a future embedding sequence."""
 
     def __init__(
         self,
         *,
+        num_frames,
+        n_preds,
+        depth,
+        heads,
+        mlp_dim,
+        input_dim,
+        hidden_dim,
+        output_dim=None,
+        dim_head=64,
+        dropout=0.0,
+        emb_dropout=0.0,
+        frameskip=25,
         diffusion_steps=1000,
         beta_schedule="squaredcos_cap_v2",
-        **kwargs,
     ):
-        super().__init__(block_class=_DiffusionBlock, **kwargs)
-        input_dim = kwargs["input_dim"]
-        if kwargs.get("output_dim") not in (None, input_dim):
+        super().__init__()
+        if output_dim not in (None, input_dim):
             raise ValueError("Diffusion output_dim must match the embedding input_dim.")
         if diffusion_steps < 2:
             raise ValueError("diffusion_steps must be at least 2.")
 
-        self.pos_embedding = nn.Parameter(
-            torch.randn(1, 1 + self.num_frames + self.n_preds, input_dim)
+        self.num_frames = num_frames
+        self.n_preds = n_preds
+        self.frameskip = frameskip
+        self.dit = LatentDiT(
+            input_dim=input_dim,
+            hidden_size=hidden_dim,
+            num_frames=num_frames,
+            num_steps=n_preds,
+            depth=depth,
+            num_heads=heads,
+            mlp_dim=mlp_dim,
+            dim_head=dim_head,
+            dropout=dropout,
+            emb_dropout=emb_dropout,
         )
-        self.timestep_embedding = nn.Embedding(diffusion_steps, input_dim)
         self.diffusion = GaussianDiffusion(
             betas=get_named_beta_schedule(beta_schedule, diffusion_steps),
             model_mean_type=ModelMeanType.EPSILON,
@@ -135,10 +149,7 @@ class DM_planner(Deterministic_planner):
         """Predict noise (B, H, D) from noisy future, timestep, and context."""
         timesteps = torch.as_tensor(timesteps, device=x.device, dtype=torch.long)
         timesteps = timesteps.reshape(-1).expand(x.size(0))
-        time_token = self.timestep_embedding(timesteps).unsqueeze(1)
-        tokens = torch.cat((time_token, context, x.to(context.dtype)), dim=1)
-        tokens = self.dropout(tokens + self.pos_embedding[:, :tokens.size(1)])
-        return self.transformer(tokens)[:, -self.n_preds:]
+        return self.dit(x.to(context.dtype), timesteps, context)
 
     @torch.no_grad()
     def sample(self, x, noise=None):

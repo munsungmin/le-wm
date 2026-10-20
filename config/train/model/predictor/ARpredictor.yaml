@@ -1,14 +1,13 @@
-predictor:
-  _target_: scripts.lewm.module.module.ARPredictor
-  num_frames: 3
-  n_preds: 1
-  frameskip: 5
-  input_dim: ${embed_dim}
-  hidden_dim: ${embed_dim}
-  output_dim: ${embed_dim}
-  depth: 6
-  heads: 16
-  mlp_dim: 2048
-  dim_head: 64
-  dropout: 0.1
-  emb_dropout: 0.0
+_target_: scripts.lewm.module.module.ARPredictor
+num_frames: 3
+n_preds: 1
+frameskip: 5
+input_dim: ${embed_dim}
+hidden_dim: ${embed_dim}
+output_dim: ${embed_dim}
+depth: 6
+heads: 16
+mlp_dim: 2048
+dim_head: 64
+dropout: 0.1
+emb_dropout: 0.0

@@ -1,5 +1,7 @@
 defaults:
   - lewm
+  - override data: pusht
+  - override forward: le_jepa
   - override model: ff_jepa
   - override init: lewm
   - _self_

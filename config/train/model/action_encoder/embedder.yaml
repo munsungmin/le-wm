@@ -1,4 +1,3 @@
-action_encoder:
-  _target_: scripts.lewm.module.module.Embedder
-  input_dim: ???
-  emb_dim: ${embed_dim}
+_target_: scripts.lewm.module.module.Embedder
+input_dim: ???
+emb_dim: ${embed_dim}
