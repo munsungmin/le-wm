@@ -45,7 +45,7 @@ class ffJEPA(JEPA):
     ## Inference only ##
     ####################
 
-    def plan(self, emb):
+    def _plan(self, emb):
 
         preds = self.planner.sample(emb)
         preds = self.plan_proj(rearrange(preds, "b t d -> (b t) d"))
@@ -72,18 +72,19 @@ class ffJEPA(JEPA):
         else:
             self.emb_history[start_idx:end_idx, -1:, :] = _init["emb"]
 
-    def _get_sub_goal(self, info, start_idx=0, end_idx=None):
+    def get_sub_goal(self, info, start_idx=0, end_idx=None):
 
         B, S = info['pixels'].shape[:2]
         context = self.emb_history[start_idx:end_idx, -self.len_history:, :]
-        seq = self.plan(context)
-        sub_goal = seq[:, -1:].unsqueeze(1).expand(B,S,-1,-1)
+        H = context.shape[1]
+        seq = self._plan(context)  # Det: (B, H, D); DM: (B, n_preds, D), H=1.
+        sub_goal = seq[:, H-1:H].unsqueeze(1).expand(B, S, -1, -1)
         return sub_goal
       
     def _criterion(self, info_dict: dict, start_idx=0, end_idx=None):
         """Compute the cost between predicted embeddings and goal embeddings."""
         pred_emb = info_dict["predicted_emb"]  # (B, S, T-1, dim)
-        goal_emb = self._get_sub_goal(info_dict, start_idx, end_idx) # (B, S, 1, dim)
+        goal_emb = info_dict["sub_goal"] # (B, S, 1, dim)
 
         goal_emb = goal_emb[..., -1:, :].expand_as(pred_emb)
 
@@ -93,5 +94,21 @@ class ffJEPA(JEPA):
             goal_emb[..., -1:, :].detach(),
             reduction="none",
         ).sum(dim=tuple(range(2, pred_emb.ndim)))  # (B, S)
+
+        return cost
+
+    def get_cost(self, info_dict: dict, action_candidates: torch.Tensor, **kwargs):
+        """ Compute the cost of action candidates given an info dict with goal and initial state."""
+
+        # assert "goal" in info_dict, "goal not in info_dict"
+
+        device = next(self.parameters()).device
+        for k in list(info_dict.keys()):
+            if torch.is_tensor(info_dict[k]):
+                info_dict[k] = info_dict[k].to(device)
+
+        info_dict = self.rollout(info_dict, action_candidates)
+
+        cost = self._criterion(info_dict, **kwargs)
 
         return cost

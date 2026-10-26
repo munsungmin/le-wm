@@ -79,6 +79,7 @@ class Deterministic_planner(ARPredictor):
         x = self.transformer(x)
         return x 
 
+    @torch.no_grad()
     def sample(self, x):
         return self._forward(x)
 

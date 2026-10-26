@@ -80,6 +80,8 @@ class ff_CEMSolver(CEMSolver):
                 expanded_infos[k] = v_batch
 
             self.model.update_history(expanded_infos, start_idx, end_idx)
+            sub_goal = self.model.get_sub_goal(expanded_infos, start_idx, end_idx)
+            expanded_infos["sub_goal"] = sub_goal
 
             # Optimization Loop
             final_batch_cost = None
