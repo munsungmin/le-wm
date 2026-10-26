@@ -1,0 +1,4 @@
+name: ffjepa
+num_eval: 256
+goal_offset_steps: 25
+eval_budget: 50

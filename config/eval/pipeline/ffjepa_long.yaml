@@ -1,0 +1,6 @@
+defaults:
+  - ffjepa
+  - _self_
+
+goal_offset_steps: 75
+eval_budget: 150

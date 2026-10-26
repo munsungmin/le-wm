@@ -1,0 +1,8 @@
+# @package _global_
+
+defaults:
+  - override /solver: ff_cem
+  - _self_
+
+checkpoint: /data/sungmin/AutoJEPA/pusht_ffjepa_DM_3072_20261025T085657079549Z/checkpoints/weights_epoch_20.pt
+policy: ${checkpoint}

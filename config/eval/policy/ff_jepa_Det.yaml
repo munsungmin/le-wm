@@ -1,0 +1,8 @@
+# @package _global_
+
+defaults:
+  - override /solver: ff_cem
+  - _self_
+
+checkpoint: ???
+policy: ${checkpoint}

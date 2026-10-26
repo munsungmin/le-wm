@@ -1,0 +1,8 @@
+# @package _global_
+
+defaults:
+  - override /solver: cem
+  - _self_
+
+checkpoint: /data/sungmin/lewm/checkpoints/pusht/lewm/weights.pt
+policy: ${checkpoint}

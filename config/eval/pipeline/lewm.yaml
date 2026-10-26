@@ -1,0 +1,4 @@
+name: lewm
+num_eval: 50
+goal_offset_steps: 25
+eval_budget: 50
