@@ -33,6 +33,17 @@ def _sample_rows(rows, num_eval, seed):
     return np.sort(np.random.default_rng(seed).choice(rows, size=num_eval, replace=False))
 
 
+def get_episodes_length(dataset, episodes):
+    col_name = "episode_idx" if "episode_idx" in dataset.column_names else "ep_idx"
+
+    episode_idx = dataset.get_col_data(col_name)
+    step_idx = dataset.get_col_data("step_idx")
+    lengths = []
+    for ep_id in episodes:
+        lengths.append(np.max(step_idx[episode_idx == ep_id]) + 1)
+    return np.array(lengths)
+
+
 def lewm_sample(
     dataset,
     ep_indices,
@@ -42,19 +53,39 @@ def lewm_sample(
     seed: int,
     criterion: Callable | None = None,
 ):
-    """Sample valid starting frames uniformly, without filtering for success.
+    """Use the original evaluator's sampling block, with cfg fields as arguments."""
+    # sample the episodes and the starting indices
+    episode_len = get_episodes_length(dataset, ep_indices)
+    max_start_idx = episode_len - goal_offset_steps - 1
+    max_start_idx_dict = {ep_id: max_start_idx[i] for i, ep_id in enumerate(ep_indices)}
+    # Map each dataset row's episode_idx to its max_start_idx
+    col_name = "episode_idx" if "episode_idx" in dataset.column_names else "ep_idx"
+    max_start_per_row = np.array(
+        [max_start_idx_dict[ep_id] for ep_id in dataset.get_col_data(col_name)]
+    )
 
-    The goal is ``goal_offset_steps`` later in the same episode (LeWM, App. F.1).
-    Different starts may belong to the same episode, as in the original evaluator.
-    ``criterion`` keeps the interface shared with FF-JEPA; it does not restrict
-    the LeWM candidate pool.
-    """
-    if goal_offset_steps < 1:
-        raise ValueError("goal_offset_steps must be positive.")
-    episodes, steps, last_steps, selected = _episode_columns(dataset, ep_indices)
-    rows = np.flatnonzero(selected & (steps + goal_offset_steps <= last_steps))
-    chosen = _sample_rows(rows, num_eval, seed)
-    return episodes[chosen], steps[chosen]
+    # remove all the lines of dataset for which dataset['step_idx'] > max_start_per_row
+    valid_mask = dataset.get_col_data("step_idx") <= max_start_per_row
+    valid_indices = np.nonzero(valid_mask)[0]
+    print(valid_mask.sum(), "valid starting points found for evaluation.")
+
+    g = np.random.default_rng(seed)
+    random_episode_indices = g.choice(
+        len(valid_indices) - 1, size=num_eval, replace=False
+    )
+
+    # sort increasingly to avoid issues with HDF5Dataset indexing
+    random_episode_indices = np.sort(valid_indices[random_episode_indices])
+
+    print(random_episode_indices)
+
+    eval_episodes = dataset.get_row_data(random_episode_indices)[col_name]
+    eval_start_idx = dataset.get_row_data(random_episode_indices)["step_idx"]
+
+    if len(eval_episodes) < num_eval:
+        raise ValueError("Not enough episodes with sufficient length for evaluation.")
+
+    return eval_episodes, eval_start_idx
 
 
 def ffjepa_sample(
@@ -94,13 +125,14 @@ def _angle_distance(first, second):
 
 
 def lewm_criterion(self, goal_state, cur_state):
-    """SWM PushT success: joint agent/block xy <20 px and angle <20 degrees."""
-    goal_state = np.asarray(goal_state)
-    cur_state = np.asarray(cur_state)
+    # success if position difference is < 20, and angle difference is < np.pi/9
     pos_diff = np.linalg.norm(goal_state[:4] - cur_state[:4])
-    angle_diff = _angle_distance(goal_state[4], cur_state[4])
+    angle_diff = np.abs(goal_state[4] - cur_state[4])
+    angle_diff = np.minimum(angle_diff, 2 * np.pi - angle_diff)
     success = pos_diff < 20 and angle_diff < np.pi / 9
-    return bool(success), float(np.linalg.norm(goal_state - cur_state))
+    state_dist = np.linalg.norm(goal_state - cur_state)
+
+    return success, state_dist
 
 
 def ffjepa_criterion(
