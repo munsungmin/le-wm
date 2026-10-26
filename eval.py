@@ -50,6 +50,7 @@ def get_dataset(cfg, dataset_name):
 @hydra.main(version_base=None, config_path="./config/eval", config_name="pusht")
 def run(cfg: DictConfig):
     """Run evaluation of dinowm vs random policy."""
+
     assert (
         cfg.plan_config.horizon * cfg.plan_config.action_block <= cfg.eval.eval_budget
     ), "Planning horizon must be smaller than or equal to eval_budget"
@@ -93,6 +94,23 @@ def run(cfg: DictConfig):
 
     if policy != "random":
         model = swm.wm.utils.load_pretrained(cfg.policy)
+
+        # add : 현재 config 의 frameskip 과 predictor의 frameskip 및 action_dim 검사 
+        env_action_dim = int(np.prod(world.envs.single_action_space.shape))
+        action_block = cfg.plan_config.action_block
+        encoder_action_dim = model.action_encoder.patch_embed.in_channels
+        assert env_action_dim * action_block == encoder_action_dim, (
+            f"Action dimension mismatch: environment action_dim={env_action_dim} "
+            f"x plan_config.action_block={action_block} gives "
+            f"{env_action_dim * action_block}, but the checkpoint's action encoder "
+            f"expects {encoder_action_dim}. Check plan_config.action_block."
+        )
+        predictor_frameskip = getattr(model.predictor, "frameskip", None)
+        assert predictor_frameskip is None or predictor_frameskip == action_block, (
+            f"plan_config.action_block={action_block} does not match the "
+            f"checkpoint's predictor.frameskip={predictor_frameskip}."
+        )
+
         model = model.to("cuda")
         model = model.eval()
         model.requires_grad_(False)
