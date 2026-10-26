@@ -1,2 +1,2 @@
-_target_: scripts.lewm.train.spt.lejepa_forward
+_target_: scripts.pipeline.train.spt.lejepa_forward
 _partial_: true

@@ -2,7 +2,7 @@ import torch
 import torch.nn.functional as F
 from einops import rearrange
 from torch import nn
-from scripts.lewm.module.utils.transformer import Transformer,ConditionalBlock
+from .utils.transformer import Transformer,ConditionalBlock
 
 class Embedder(nn.Module):
     def __init__(

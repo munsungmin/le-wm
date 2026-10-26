@@ -2,4 +2,4 @@ defaults:
   - cem
   - _self_
 
-_target_: scripts.ffjepa.eval.solver.ff_CEMSolver
+_target_: scripts.method.ffjepa.eval.solver.ff_CEMSolver

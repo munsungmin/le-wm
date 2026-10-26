@@ -3,8 +3,8 @@ import torch
 import torch.nn.functional as F
 from einops import rearrange
 from torch import nn 
-from scripts.lewm.module.module import Transformer, ARPredictor
-from scripts.lewm.module.utils.transformer import Block
+from scripts.method.lewm.utils.module import Transformer, ARPredictor
+from scripts.method.lewm.utils.utils.transformer import Block
 from .dit import LatentDiT
 from .diffusion.gaussian_diffusion import (
     GaussianDiffusion,

@@ -1,4 +1,4 @@
-_target_: scripts.lewm.module.module.MLP
+_target_: scripts.method.lewm.utils.module.MLP
 input_dim: ${embed_dim}
 output_dim: ${embed_dim}
 hidden_dim: 2048

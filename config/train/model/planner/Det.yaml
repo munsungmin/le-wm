@@ -1,4 +1,4 @@
-_target_: scripts.ffjepa.module.module.Deterministic_planner
+_target_: scripts.method.ffjepa.utils.module.Deterministic_planner
 num_frames: 3
 n_preds : 1
 frameskip : 25

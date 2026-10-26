@@ -10,7 +10,7 @@ from lightning.pytorch.loggers import WandbLogger
 from lightning.pytorch.callbacks import ModelCheckpoint
 from omegaconf import OmegaConf, open_dict
 
-from scripts.lewm.train.loss import Loss
+from scripts.pipeline.train.loss import Loss
 from scripts.utils.callbacks import SaveCkptCallback
 from scripts.utils.loggers import JsonLogger
 from scripts.utils.runs import finish_run, prepare_run

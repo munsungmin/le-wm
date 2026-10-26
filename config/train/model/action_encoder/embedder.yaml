@@ -1,3 +1,3 @@
-_target_: scripts.lewm.module.module.Embedder
+_target_: scripts.method.lewm.utils.module.Embedder
 input_dim: ???
 emb_dim: ${embed_dim}

@@ -8,7 +8,7 @@ defaults:
   - /data/input_spec@_global_.data: lewm
   - _self_
 
-_target_: scripts.lewm.model.model.JEPA
+_target_: scripts.method.model.jepa
 
 
 

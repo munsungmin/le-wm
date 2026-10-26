@@ -1,6 +1,6 @@
 encoder_emb_sigreg:
   fn:
-    _target_: scripts.lewm.train.loss.SIGReg
+    _target_: scripts.pipeline.train.loss.SIGReg
 
   inputs:
     proj: encoder.emb

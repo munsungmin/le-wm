@@ -1,4 +1,4 @@
-_target_: scripts.lewm.module.module.ARPredictor
+_target_: scripts.method.lewm.utils.module.ARPredictor
 num_frames: 3
 n_preds: 1
 frameskip: 5
