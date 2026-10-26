@@ -14,7 +14,7 @@ from sklearn import preprocessing
 from torchvision.transforms import v2 as transforms
 import stable_worldmodel as swm
 from types import MethodType
-
+import pytorch_lightning as pl 
 def img_transform(cfg):
     transform = transforms.Compose(
         [
@@ -49,6 +49,8 @@ def get_dataset(cfg, dataset_name):
 
 @hydra.main(version_base=None, config_path="./config/eval", config_name="pusht")
 def run(cfg: DictConfig):
+    
+    pl.seed_everything(cfg.seed, workers=True)
     """Run evaluation of dinowm vs random policy."""
 
     assert (
@@ -122,7 +124,7 @@ def run(cfg: DictConfig):
         )
 
     else:
-        policy = swm.policy.RandomPolicy()
+        policy = swm.policy.RandomPolicy(seed=cfg.seed)
 
     results_path = (
         Path(swm.data.utils.get_cache_dir(), cfg.policy).parent
