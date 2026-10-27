@@ -8,6 +8,15 @@ defaults:
 
 seed: 42
 
+wandb:
+  enabled: True
+  config:
+    entity: lewm
+    project: lewm
+    resume: allow
+    log_model: False
+    job_type: evaluation
+
 plan_config:
   horizon: 5
   receding_horizon: 5

@@ -108,6 +108,18 @@ python eval.py --config-name=pusht.yaml policy=pusht/lewm
 python eval.py --config-name=pusht.yaml policy=pusht/lewm_object.ckpt
 ```
 
+Evaluation uses the same `wandb.enabled` and `wandb.config` settings as training.
+Enable logging with:
+
+```bash
+python eval.py policy=lewm pipeline=lewm wandb.enabled=true
+```
+
+Each evaluation creates a separate W&B run containing the resolved config,
+checkpoint metadata, scalar `eval/*` metrics, and evaluation time. Project and
+entity default to `lewm`; override `wandb.config.project` and `wandb.config.entity`
+as needed. W&B logging is disabled by default.
+
 ## Pretrained Checkpoints
 
 Pretrained LeWM checkpoints for each environment are mirrored on the Hugging Face

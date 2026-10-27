@@ -6,12 +6,14 @@ import json
 import re
 import tempfile
 import time
+from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import hydra
 from hydra.core.hydra_config import HydraConfig
+from lightning.pytorch.loggers import WandbLogger
 import numpy as np
 import stable_pretraining as spt
 import torch
@@ -142,6 +144,27 @@ def save_eval_results(results_path, metadata, metrics, elapsed, episodes, start_
     return record
 
 
+@contextmanager
+def evaluation_logger(cfg, results_path, metadata):
+    """Use the training logger settings for one independent evaluation run."""
+    if not cfg.get("wandb", {}).get("enabled", False):
+        yield None
+        return
+    wandb_config = OmegaConf.to_container(cfg.wandb.config, resolve=True)
+    wandb_config.update(
+        name=f"{metadata['model']}_{metadata['pipeline']}_{cfg.seed}_{metadata['run_id']}",
+        id=metadata["run_id"],
+        save_dir=str(results_path),
+    )
+    logger = WandbLogger(**wandb_config)
+    with logger.experiment:
+        logger.log_hyperparams({
+            **OmegaConf.to_container(cfg, resolve=True),
+            "evaluation_metadata": metadata,
+        })
+        yield logger
+
+
 @hydra.main(version_base=None, config_path="./config/eval", config_name="eval")
 def run(cfg: DictConfig):
     
@@ -229,24 +252,32 @@ def run(cfg: DictConfig):
 
     world.set_policy(policy)
 
-    start_time = time.time()
-    metrics = world.evaluate(
-        dataset=dataset,
-        start_steps=eval_start_idx.tolist(),
-        goal_offset=cfg.eval.goal_offset_steps,
-        eval_budget=cfg.eval.eval_budget,
-        episodes_idx=eval_episodes.tolist(),
-        callables=OmegaConf.to_container(cfg.eval.get("callables"), resolve=True),
-        video=results_path / "videos",
-    )
-    end_time = time.time()
-    
-    print(metrics)
+    with evaluation_logger(cfg, results_path, run_metadata) as logger:
+        start_time = time.time()
+        metrics = world.evaluate(
+            dataset=dataset,
+            start_steps=eval_start_idx.tolist(),
+            goal_offset=cfg.eval.goal_offset_steps,
+            eval_budget=cfg.eval.eval_budget,
+            episodes_idx=eval_episodes.tolist(),
+            callables=OmegaConf.to_container(cfg.eval.get("callables"), resolve=True),
+            video=results_path / "videos",
+        )
+        end_time = time.time()
 
-    record = save_eval_results(
-        results_path, run_metadata, metrics, end_time - start_time,
-        eval_episodes, eval_start_idx,
-    )
+        print(metrics)
+
+        record = save_eval_results(
+            results_path, run_metadata, metrics, end_time - start_time,
+            eval_episodes, eval_start_idx,
+        )
+        if logger is not None:
+            scalar_metrics = {
+                f"eval/{key}": value for key, value in metrics.items()
+                if isinstance(value, (int, float, np.number))
+            }
+            scalar_metrics["eval/evaluation_time_seconds"] = end_time - start_time
+            logger.log_metrics(scalar_metrics, step=0)
     print(f"Evaluation results saved to {results_path / 'metrics.json'}")
 
     results_path = results_path / cfg.output.filename
