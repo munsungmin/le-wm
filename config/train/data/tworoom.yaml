@@ -3,8 +3,8 @@ environment_id: swm/TwoRoom-v1
 environment_package: stable-worldmodel
 available_keys: [pixels, action, proprio]
 dataset:
-  num_steps: ${eval:'${num_preds} + ${history_size}'}
-  frameskip: 5
+  num_steps: ${data.preprocessing.dataset.num_steps}
+  frameskip: ${data.preprocessing.dataset.frameskip}
   name: tworoom.h5
-  keys_to_load: ${eval:'[k for k in ${data.available_keys} if k in ${data.keys_from_model}]'}
-  keys_to_cache: ${eval:'[k for k in ${data.dataset.keys_to_load} if not k.startswith("pixels")]'}
+  keys_to_load: ${oc.create:${eval:'[k for k in ${data.available_keys} if k in ${data.preprocessing.input_spec.keys_from_model}]'}}
+  keys_to_cache: ${oc.create:${eval:'[k for k in ${data.dataset.keys_to_load} if not k.startswith("pixels")]'}}

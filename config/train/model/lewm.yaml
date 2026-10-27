@@ -5,7 +5,8 @@ defaults:
   - predictor: ARpredictor
   - projector: MLP
   - /loss@_global_.loss: lewm
-  - /data/input_spec@_global_.data: lewm
+  - /data/preprocessing@_global_.data.preprocessing: lewm
+  - /init@_global_.init: random
   - _self_
 
 _target_: scripts.method.model.jepa

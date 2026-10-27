@@ -1,0 +1,23 @@
+defaults:
+  - _self_
+
+sampler:
+  _target_: scripts.pipeline.train.sampling.ffjepa_sample
+  _partial_: true
+  state_column: state
+  goal_column: null
+  goal_state: null
+  criterion:
+    _target_: scripts.pipeline.eval.criterion.ffjepa_success
+    _partial_: true
+    position_threshold: 20.0
+    angle_threshold_deg: 5.0
+    goal_position: [256.0, 256.0]
+    goal_angle: 0.7853981633974483
+
+input_spec:
+  keys_from_model: [pixels]
+
+dataset:
+  num_steps: ${eval:'${model.planner.num_frames} + ${model.planner.n_preds}'}
+  frameskip: ${model.planner.frameskip}

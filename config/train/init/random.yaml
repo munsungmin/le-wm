@@ -1,0 +1,5 @@
+_target_: scripts.pipeline.train.initialization.initialize_model
+_partial_: true
+path: null
+module: []
+freeze: []

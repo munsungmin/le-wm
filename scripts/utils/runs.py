@@ -18,13 +18,15 @@ def _timestamp():
     )
 
 
+def _experiment_dir(root, run_id, resume_dir, resume=False):
+    if resume and not resume_dir:
+        raise ValueError("resume=true requires resume_dir=/absolute/run/path.")
+    path = resume_dir if resume else Path(root) / run_id
+    return str(Path(path).expanduser().resolve())
+
+
 OmegaConf.register_new_resolver("utc_timestamp", _timestamp, use_cache=True)
-OmegaConf.register_new_resolver(
-    "experiment_dir",
-    lambda root, run_id, resume: str(
-        Path(resume or Path(root) / run_id).expanduser().resolve()
-    ),
-)
+OmegaConf.register_new_resolver("experiment_dir", _experiment_dir)
 
 
 def _is_primary():
@@ -51,9 +53,11 @@ def _write_metadata(run_dir, metadata):
 
 def prepare_run(cfg):
     """Create a run, or restore its saved config after validating the commit."""
+    if cfg.resume and not cfg.resume_dir:
+        raise ValueError("resume=true requires resume_dir=/absolute/run/path.")
     run_dir = Path(cfg.run_dir)
     ckpt_path = None
-    if cfg.resume_dir:
+    if cfg.resume:
         metadata = json.loads((run_dir / "metadata.json").read_text(encoding="utf-8"))
         current_commit = _git("rev-parse", "HEAD")
         if metadata["git_commit"] != current_commit:
@@ -67,9 +71,13 @@ def prepare_run(cfg):
         ckpt_path = run_dir / "checkpoints" / "last.ckpt"
         if not ckpt_path.is_file():
             raise FileNotFoundError(f"Resume checkpoint not found: {ckpt_path}")
+        cfg.resume = True
         cfg.resume_dir = str(run_dir)
         cfg.run_dir = str(run_dir)
         if _is_primary():
+            resolved = OmegaConf.to_container(cfg, resolve=True, throw_on_missing=True)
+            OmegaConf.save(cfg, run_dir / "config.yaml", resolve=True)
+            metadata["config_hash"] = _config_hash(resolved)
             metadata["status"] = "running"
             _write_metadata(run_dir, metadata)
     else:
@@ -77,7 +85,7 @@ def prepare_run(cfg):
         cfg = OmegaConf.create(resolved)
         if _is_primary():
             if (run_dir / "metadata.json").exists() or (run_dir / "config.yaml").exists():
-                raise FileExistsError(f"Run already exists; use resume_dir={run_dir}")
+                raise FileExistsError(f"Run already exists; use resume=true resume_dir={run_dir}")
             run_dir.mkdir(parents=True, exist_ok=True)
             metadata = {
                 "schema_version": 1,

@@ -6,7 +6,7 @@ defaults:
 
 run_timestamp: ${utc_timestamp:}
 run_id: ${data.env}_${output_model_name}_${seed}_${run_timestamp}
-run_dir: ${experiment_dir:${output_root},${run_id},${resume_dir}}
+run_dir: ${experiment_dir:${output_root},${run_id},${resume_dir},${resume}}
 
 hydra:
   run:

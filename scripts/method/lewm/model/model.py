@@ -65,8 +65,8 @@ class JEPA(nn.Module):
     
     def step(self, batch, cfg):
         
-        ctx_len = cfg.history_size
-        n_preds = cfg.num_preds
+        ctx_len = cfg.model.predictor.num_frames
+        n_preds = cfg.model.predictor.n_preds
 
         loss_info={}
         info = self.encode(batch, loss_info)

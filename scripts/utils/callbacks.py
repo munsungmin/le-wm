@@ -3,6 +3,18 @@ import torch
 from stable_pretraining import data as dt
 from lightning.pytorch.callbacks import Callback
 
+
+class FrozenModulesCallback(Callback):
+    """Keep frozen modules' BatchNorm and dropout state fixed during training."""
+
+    def __init__(self, modules):
+        self.modules = list(modules)
+
+    def on_train_batch_start(self, trainer, pl_module, batch, batch_idx):
+        for name in self.modules:
+            getattr(pl_module.model, name).eval()
+
+
 class SaveCkptCallback(Callback):
     """Callback to save model checkpoint after each epoch using save_pretrained."""
 

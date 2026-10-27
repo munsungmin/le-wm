@@ -1,5 +1,6 @@
 import os
 from functools import partial
+from pathlib import Path
 
 import hydra
 import lightning as pl
@@ -11,7 +12,7 @@ from lightning.pytorch.callbacks import ModelCheckpoint
 from omegaconf import OmegaConf, open_dict
 
 from scripts.pipeline.train.loss import Loss
-from scripts.utils.callbacks import SaveCkptCallback
+from scripts.utils.callbacks import FrozenModulesCallback, SaveCkptCallback
 from scripts.utils.loggers import JsonLogger
 from scripts.utils.runs import finish_run, prepare_run
 from scripts.utils.utils import get_column_normalizer, get_img_preprocessor
@@ -19,11 +20,16 @@ from scripts.utils.utils import get_column_normalizer, get_img_preprocessor
 
 @hydra.main(version_base=None, config_path="./config/train", config_name="lewm")
 def run(cfg):
-    cfg, run_dir, ckpt_path = prepare_run(cfg)
+    if cfg.resume:
+        cfg, run_dir, ckpt_path = prepare_run(cfg)
+    else:
+        run_dir, ckpt_path = Path(cfg.run_dir), None
+    record_failure = bool(cfg.resume) or not (run_dir / "metadata.json").is_file()
     try:
         trainer = train(cfg, run_dir, ckpt_path)
     except BaseException as exc:
-        finish_run(run_dir, "interrupted" if isinstance(exc, KeyboardInterrupt) else "failed")
+        if record_failure and (run_dir / "metadata.json").is_file():
+            finish_run(run_dir, "interrupted" if isinstance(exc, KeyboardInterrupt) else "failed")
         raise
     else:
         finish_run(run_dir, "interrupted" if trainer.interrupted else "completed")
@@ -33,21 +39,14 @@ def run(cfg):
 
 def train(cfg, run_dir, ckpt_path):
     pl.seed_everything(cfg.seed, workers=True)
+    resuming = ckpt_path is not None
 
     ##############################
     ##          model           ##
     ##############################
-    world_model = hydra.utils.instantiate(cfg.model)
-    load_cfg = OmegaConf.to_container(cfg.init, resolve=True) if ckpt_path is None else None
-    if load_cfg:
-        pretrained = swm.wm.utils.load_pretrained(
-            load_cfg["path"], cache_dir=load_cfg["cache_dir"]
-        )
-        for name in load_cfg["module"]:
-            getattr(world_model, name).load_state_dict(
-                getattr(pretrained, name).state_dict()
-            )
-        del pretrained
+    initializer = hydra.utils.instantiate(cfg.init)
+    saved_model = OmegaConf.to_container(cfg.model, resolve=True) if resuming else None
+    initializer(cfg=cfg, resume=resuming, saved_model=saved_model)
 
     #########################
     ##       dataset       ##
@@ -59,9 +58,13 @@ def train(cfg, run_dir, ckpt_path):
     dataset = swm.data.load_dataset(
         dataset_name, transform=None, cache_dir=cache_dir, **dataset_cfg
     )
+    sampler = hydra.utils.instantiate(cfg.data.preprocessing.sampler)
+    dataset = sampler(dataset)
     transforms = [get_img_preprocessor(source='pixels', target='pixels', img_size=cfg.img_size)]
     
     with open_dict(cfg):
+        if OmegaConf.is_missing(cfg.model.action_encoder, "input_dim"):
+            cfg.model.action_encoder.input_dim = cfg.data.dataset.frameskip * dataset.get_dim("action")
         for col in cfg.data.dataset.keys_to_load:
             if col.startswith("pixels"):
                 continue
@@ -82,6 +85,10 @@ def train(cfg, run_dir, ckpt_path):
     ##       model / optim      ##
     ##############################
 
+    if not resuming:
+        cfg, run_dir, _ = prepare_run(cfg)
+    world_model = hydra.utils.instantiate(cfg.model)
+    frozen_modules = initializer(cfg=cfg, model=world_model, resume=resuming)
 
     optimizers = {
         'model_opt': {
@@ -129,13 +136,13 @@ def train(cfg, run_dir, ckpt_path):
     trainer = pl.Trainer(
         **cfg.trainer,
         default_root_dir=str(run_dir),
-        callbacks=[object_dump_callback, resume_callback],
+        callbacks=[object_dump_callback, resume_callback, FrozenModulesCallback(frozen_modules)],
         num_sanity_val_steps=1,
         logger=loggers,
         enable_checkpointing=True,
     )
 
-    trainer.fit(world_model, datamodule=data_module, ckpt_path=ckpt_path)
+    trainer.fit(world_model, datamodule=data_module, ckpt_path=ckpt_path, weights_only=False)
     return trainer
 
 

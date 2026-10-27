@@ -68,7 +68,31 @@ To launch training:
 python train.py data=pusht
 ```
 
-Checkpoints are saved to `$STABLEWM_HOME` upon completion.
+For FF-JEPA, initialize the frozen world model from a LeWM weights file, with
+its `config.json` in the same directory, and select the planner:
+
+```bash
+python train.py --config-name ffjepa model/planner=Det init.path=/path/to/lewm/weights.pt
+python train.py --config-name ffjepa model/planner=DM init.path=/path/to/lewm/weights.pt
+```
+
+The model config selects `data.preprocessing`: LeWM uses all clips, while
+FF-JEPA retains all clips of episodes whose final raw state meets its PushT
+success criterion. Training instantiates `data.preprocessing.sampler` and calls
+`dataset = sampler(dataset)` before normalization and the train/validation split.
+The `lewm_sample` and `ffjepa_sample` functions live in
+`scripts/pipeline/train/sampling.py`; select or replace the callable in
+`config/train/data/preprocessing/{lewm,ff_jepa}.yaml`.
+
+Each run is recorded under `output_root/<env>_<model>_<seed>_<UTC timestamp>/`
+with the resolved `config.yaml`, `metadata.json`, epoch metrics in
+`metrics.jsonl`, and checkpoints under `checkpoints/`. The default `resume=false`
+starts a new run, even when `resume_dir` is set. Resume from
+`checkpoints/last.ckpt` with
+`python train.py resume=true resume_dir=/absolute/run/path`; `resume=true`
+requires `resume_dir`. The saved config and Git commit are checked, and the
+original initialization file is no longer needed. Model weights are exported
+as `weights_epoch_<N>.pt`.
 
 For baseline scripts, see the stable-worldmodel [scripts](https://github.com/galilai-group/stable-worldmodel/tree/main/scripts/train) folder.
 

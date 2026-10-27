@@ -1,5 +1,6 @@
-path: "pusht/lewm" 
-cache_dir: ???
+_target_: scripts.pipeline.train.initialization.initialize_model
+_partial_: true
+path: /data/sungmin/lewm/checkpoints/pusht/lewm/weights.pt
 module:
   - encoder 
   - predictor 

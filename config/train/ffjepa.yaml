@@ -3,7 +3,6 @@ defaults:
   - override data: pusht
   - override forward: le_jepa
   - override model: ff_jepa
-  - override init: lewm
   - _self_
 
 output_model_name: ffjepa_${hydra:runtime.choices.model/planner}
@@ -13,6 +12,8 @@ train_split: 0.9
 seed: 3072
 img_size: 224
 embed_dim: 192
+resume: false
+resume_dir: null
 
 trainer:
   max_epochs: 100

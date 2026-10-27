@@ -3,13 +3,13 @@ defaults:
   - data: pusht
   - forward: le_jepa
   - model: lewm
-  - init: random
   - _self_
 
 
 #variables 
 output_model_name: lewm
 output_root: /data/sungmin/AutoJEPA
+resume: false
 resume_dir: null
 
 num_workers: 6

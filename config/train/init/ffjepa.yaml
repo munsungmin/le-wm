@@ -1,5 +1,6 @@
-path: "pusht/ffjepa" 
-cache_dir: ???
+_target_: scripts.pipeline.train.initialization.initialize_model
+_partial_: true
+path: ???  # Full path to an FF-JEPA .pt checkpoint.
 module:
   - encoder 
   - predictor 
@@ -7,4 +8,4 @@ module:
   - projector
   - pred_proj
   - planner 
-freeze: [True, True, True, True, True, True]
+freeze: [True, True, True, True, True, False]
