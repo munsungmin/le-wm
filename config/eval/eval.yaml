@@ -19,6 +19,12 @@ eval:
   eval_budget: ${pipeline.eval_budget}
   img_size: 224
 
+output:
+  model: null # defaults to the selected policy; may label a checkpoint/retraining run
+  depth: 0
+  intervention: none
+  interference_k: 0
+
 sampler:
   _target_: scripts.pipeline.eval.${world_name}.${pipeline.name}_sample
   _partial_: true

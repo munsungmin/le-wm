@@ -2,10 +2,16 @@ import os
 
 os.environ["MUJOCO_GL"] = "egl"
 
+import json
+import re
+import tempfile
 import time
+from datetime import datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import hydra
+from hydra.core.hydra_config import HydraConfig
 import numpy as np
 import stable_pretraining as spt
 import torch
@@ -47,7 +53,96 @@ def get_dataset(cfg, dataset_name):
     )
     return dataset
 
-@hydra.main(version_base=None, config_path="./config/eval", config_name="pusht")
+
+def _json_default(value):
+    if isinstance(value, (np.ndarray, np.generic)):
+        return value.tolist()
+    if torch.is_tensor(value):
+        return value.detach().cpu().tolist()
+    if isinstance(value, Path):
+        return str(value)
+    raise TypeError(f"Cannot serialize {type(value).__name__} as JSON")
+
+
+def _write_json(path, data):
+    path.write_text(
+        json.dumps(data, default=_json_default, ensure_ascii=False, indent=2)
+        + "\n",
+        encoding="utf-8",
+    )
+
+
+def prepare_eval_output(cfg):
+    """Use the checkpoint directory for both single runs and Hydra sweeps."""
+    choices = HydraConfig.get().runtime.choices if HydraConfig.initialized() else {}
+    pipeline = choices.get("pipeline", cfg.pipeline.name)
+    output = cfg.output
+    checkpoint_path = None
+    if cfg.policy != "random":
+        cache_dir = swm.data.utils.get_cache_dir(sub_folder="checkpoints")
+        checkpoint_path = Path(cache_dir, cfg.policy).expanduser()
+        if not checkpoint_path.is_file():
+            if not checkpoint_path.is_dir():
+                checkpoint_path = cache_dir / f"models--{cfg.policy.replace('/', '--')}"
+            # load_pretrained already requires an unambiguous checkpoint folder.
+            checkpoint_path, = checkpoint_path.glob("*.pt")
+        checkpoint_path = checkpoint_path.resolve()
+
+    checkpoint_dir = (
+        checkpoint_path.parent if checkpoint_path is not None else Path(__file__).parent
+    )
+    seed_dir = checkpoint_dir / "evaluations" / pipeline / f"seed_{cfg.seed}"
+    seed_dir.mkdir(parents=True, exist_ok=True)
+    started_at = datetime.now(ZoneInfo("Asia/Seoul"))
+    results_path = Path(tempfile.mkdtemp(
+        prefix=started_at.strftime("%Y%m%dT%H%M%S%f%z") + "_", dir=seed_dir
+    ))
+    epoch = (
+        re.search(r"(?:^|_)epoch_(\d+)(?:_|$)", checkpoint_path.stem)
+        if checkpoint_path is not None else None
+    )
+    metadata = {
+        "env": cfg.world_name,
+        "model": output.get("model") or choices.get("policy", cfg.policy),
+        "seed": int(cfg.seed),
+        "depth": int(output.get("depth", 0)),
+        # CEM lookahead in environment steps; independent of the goal distance.
+        "horizon": int(cfg.plan_config.horizon * cfg.plan_config.action_block),
+        "horizon_unit": "environment_steps",
+        "intervention": output.get("intervention", "none"),
+        "interference_k": int(output.get("interference_k", 0)),
+        "checkpoint_step": checkpoint_path.name if checkpoint_path else None,
+        "checkpoint_epoch": int(epoch.group(1)) if epoch else None,
+        "checkpoint_path": str(checkpoint_path) if checkpoint_path else None,
+        "pipeline": pipeline,
+        "goal_offset": int(cfg.eval.goal_offset_steps),
+        "budget": int(cfg.eval.eval_budget),
+        "num_eval": int(cfg.eval.num_eval),
+        "plan_horizon": int(cfg.plan_config.horizon),
+        "action_block": int(cfg.plan_config.action_block),
+        "solver": cfg.solver._target_ if checkpoint_path else None,
+        "dataset": cfg.eval.dataset_name,
+        "run_id": results_path.name,
+        "started_at": started_at.isoformat(),
+    }
+    OmegaConf.save(cfg, results_path / "config.yaml", resolve=True)
+    _write_json(results_path / "metadata.json", metadata)
+    return results_path, metadata
+
+
+def save_eval_results(results_path, metadata, metrics, elapsed, episodes, start_steps):
+    record = {
+        **metadata,
+        "evaluation_time_seconds": elapsed,
+        "episode_indices": episodes,
+        "start_steps": start_steps,
+        "metrics": metrics,
+    }
+    _write_json(results_path / "metrics.json", record)
+    return record
+
+
+@hydra.main(version_base=None, config_path="./config/eval", config_name="eval")
 def run(cfg: DictConfig):
     
     pl.seed_everything(cfg.seed, workers=True)
@@ -126,19 +221,13 @@ def run(cfg: DictConfig):
     else:
         policy = swm.policy.RandomPolicy(seed=cfg.seed)
 
-    results_path = (
-        Path(swm.data.utils.get_cache_dir(), cfg.policy).parent
-        if cfg.policy != "random"
-        else Path(__file__).parent
-    )
+    results_path, run_metadata = prepare_eval_output(cfg)
 
     # add : pipeline 에 따른 episode 선정 기준 대응  
     sampler = hydra.utils.instantiate(cfg.sampler)
     eval_episodes, eval_start_idx = sampler(dataset, ep_indices)
 
     world.set_policy(policy)
-
-    results_path.mkdir(parents=True, exist_ok=True)
 
     start_time = time.time()
     metrics = world.evaluate(
@@ -148,11 +237,17 @@ def run(cfg: DictConfig):
         eval_budget=cfg.eval.eval_budget,
         episodes_idx=eval_episodes.tolist(),
         callables=OmegaConf.to_container(cfg.eval.get("callables"), resolve=True),
-        video=results_path,
+        video=results_path / "videos",
     )
     end_time = time.time()
     
     print(metrics)
+
+    record = save_eval_results(
+        results_path, run_metadata, metrics, end_time - start_time,
+        eval_episodes, eval_start_idx,
+    )
+    print(f"Evaluation results saved to {results_path / 'metrics.json'}")
 
     results_path = results_path / cfg.output.filename
     results_path.parent.mkdir(parents=True, exist_ok=True)
@@ -165,8 +260,8 @@ def run(cfg: DictConfig):
         f.write("\n")
 
         f.write("==== RESULTS ====\n")
-        f.write(f"metrics: {metrics}\n")
-        f.write(f"evaluation_time: {end_time - start_time} seconds\n")
+        f.write(json.dumps(record, default=_json_default, ensure_ascii=False, indent=2))
+        f.write("\n")
 
 
 if __name__ == "__main__":
